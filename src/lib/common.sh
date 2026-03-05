@@ -3,6 +3,9 @@
 # Mac Security Monitor shared library
 # Author: Francesco Poltero
 
+# shellcheck disable=SC2034
+# This library exports shared path variables consumed by scripts that source it.
+
 BASE_DIR="${BASE_DIR:-$HOME/.mac-security-monitor}"
 BIN_DIR="$BASE_DIR/bin"
 DOC_DIR="$BASE_DIR/docs"

@@ -22,6 +22,7 @@ Architecture refactor release for **Mac Security Monitor**.
 - Updated installer to copy the complete `src/*` tree into `~/.mac-security-monitor/bin`.
 - Updated README with internal architecture documentation.
 - Improved CI checks to validate the modular script layout.
+- Added ShellCheck source annotations for shared library imports across modules.
 
 ### Compatibility
 
@@ -32,6 +33,11 @@ Architecture refactor release for **Mac Security Monitor**.
   - `update-check.sh`
   - `update-install.sh`
   - `reinstall.sh`
+
+### Fixed
+
+- Fixed CI `Run shellcheck` failures caused by dynamic `source` path detection (SC1091).
+- Documented shared-library exported path variables to avoid false positive SC2034 warnings.
 
 ### Author
 

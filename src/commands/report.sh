@@ -6,6 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=src/lib/common.sh
 source "$SCRIPT_DIR/../lib/common.sh"
 
 echo "The report command is not implemented yet."
