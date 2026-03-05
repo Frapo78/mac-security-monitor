@@ -32,7 +32,7 @@ normalize_version() {
 
 is_valid_version() {
   local version="$1"
-  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+  [[ "$version" =~ ^[0-9]+(\.[0-9]+)+$ ]]
 }
 
 read_local_version() {
@@ -55,13 +55,20 @@ compare_versions() {
   local left="$1"
   local right="$2"
 
-  local l_major l_minor l_patch r_major r_minor r_patch
-  IFS='.' read -r l_major l_minor l_patch <<<"$left"
-  IFS='.' read -r r_major r_minor r_patch <<<"$right"
+  local -a left_parts right_parts
+  local i max_len l_part r_part
 
-  for pair in "$l_major:$r_major" "$l_minor:$r_minor" "$l_patch:$r_patch"; do
-    local l_part="${pair%%:*}"
-    local r_part="${pair##*:}"
+  IFS='.' read -rA left_parts <<<"$left"
+  IFS='.' read -rA right_parts <<<"$right"
+
+  max_len=${#left_parts[@]}
+  if (( ${#right_parts[@]} > max_len )); then
+    max_len=${#right_parts[@]}
+  fi
+
+  for ((i = 1; i <= max_len; i++)); do
+    l_part="${left_parts[$i]:-0}"
+    r_part="${right_parts[$i]:-0}"
 
     if ((10#$l_part > 10#$r_part)); then
       return 1

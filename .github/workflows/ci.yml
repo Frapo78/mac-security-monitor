@@ -22,6 +22,7 @@ jobs:
             src/maccheck-alert
             src/securitycheck-status
             src/security-monitor-update
+            src/reinstall.sh
             src/update-check.sh
             src/update-install.sh
             installer/install.sh
@@ -42,6 +43,7 @@ jobs:
             src/maccheck-alert \
             src/securitycheck-status \
             src/security-monitor-update \
+            src/reinstall.sh \
             src/update-check.sh \
             src/update-install.sh
           zsh -n installer/install.sh installer/uninstall.sh
@@ -63,6 +65,7 @@ jobs:
             src/maccheck-alert \
             src/securitycheck-status \
             src/security-monitor-update \
+            src/reinstall.sh \
             src/update-check.sh \
             src/update-install.sh \
             installer/install.sh \

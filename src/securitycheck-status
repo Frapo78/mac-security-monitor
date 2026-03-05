@@ -24,6 +24,14 @@ read_version() {
   fi
 }
 
+launchagent_loaded() {
+  if launchctl print "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  launchctl list | grep -q "$LAUNCH_AGENT_LABEL"
+}
+
 print_last_change() {
   if [[ -f "$LAST_CHANGE_FILE" ]]; then
     cat "$LAST_CHANGE_FILE"
@@ -43,6 +51,8 @@ print_log() {
 
 print_usage() {
   cat <<'USAGE'
+Mac Security Monitor
+
 Usage:
   security-monitor
   security-monitor --version
@@ -51,6 +61,7 @@ Usage:
   security-monitor update-baseline
   security-monitor check-update
   security-monitor upgrade
+  security-monitor reinstall
 USAGE
 }
 
@@ -64,6 +75,10 @@ run_check_update() {
 
 run_upgrade() {
   exec "$BIN_DIR/update-install.sh"
+}
+
+run_reinstall() {
+  exec "$BIN_DIR/reinstall.sh"
 }
 
 case "${1:-}" in
@@ -90,6 +105,9 @@ case "${1:-}" in
   "upgrade")
     run_upgrade
     ;;
+  "reinstall")
+    run_reinstall
+    ;;
   "help"|"--help"|"-h")
     print_usage
     exit 0
@@ -106,7 +124,7 @@ echo "Version: $(read_version)"
 
 echo
 echo "LaunchAgent registration:"
-if launchctl list | grep -q "$LAUNCH_AGENT_LABEL"; then
+if launchagent_loaded; then
   echo "Loaded: yes ($LAUNCH_AGENT_LABEL)"
 else
   echo "Loaded: no"
@@ -147,7 +165,12 @@ else
   echo "maccheck-alert: missing or not executable"
 fi
 
-echo
+if [[ -x "$BIN_DIR/reinstall.sh" ]]; then
+  echo "reinstall.sh: executable"
+else
+  echo "reinstall.sh: missing or not executable"
+fi
+
 if [[ -x "$BIN_DIR/update-check.sh" ]]; then
   echo "update-check.sh: executable"
 else

@@ -4,6 +4,32 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and the project follows Semantic Versioning.
 
+## [1.0.1] - 2026-03-05
+
+Maintenance release for the first public stable cycle of **Mac Security Monitor**.
+
+### Added
+
+- New `security-monitor reinstall` command.
+- New `src/reinstall.sh` for safe reinstall from GitHub.
+- Homebrew formula example file: `mac-security-monitor.rb`.
+
+### Changed
+
+- Improved CLI help output and command routing.
+- Improved installer compatibility with Homebrew prefixes.
+- Improved update version comparison logic to support multi-part versions.
+- Updated README with Updating, Reinstall, Homebrew, and Future Roadmap sections.
+- Updated CI validation to include `reinstall.sh`.
+
+### Fixed
+
+- LaunchAgent status detection uses label `com.frapo78.securitycheck` consistently.
+
+### Author
+
+Francesco Poltero
+
 ## [1.0.0] - 2026-03-05
 
 First public release candidate of **Mac Security Monitor**.

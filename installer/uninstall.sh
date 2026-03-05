@@ -13,9 +13,9 @@ MONITOR_LOG="$LOG_DIR/monitor.log"
 LAUNCH_AGENT_LABEL="com.frapo78.securitycheck"
 LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/${LAUNCH_AGENT_LABEL}.plist"
 
-CLI_DIR="${CLI_DIR:-/usr/local/bin}"
-CLI_STATUS="$CLI_DIR/security-monitor"
-CLI_UPDATE="$CLI_DIR/security-monitor-update"
+CLI_DIR="${CLI_DIR:-}"
+CLI_STATUS=""
+CLI_UPDATE=""
 
 info() { echo "[INFO] $*"; }
 ok() { echo "[OK]   $*"; }
@@ -30,6 +30,28 @@ log_event() {
 
 verify_base_dir() {
   [[ "$BASE_DIR" != "/" && "$BASE_DIR" != "$HOME" && -n "$BASE_DIR" ]] || fail "Unsafe BASE_DIR: $BASE_DIR"
+}
+
+detect_cli_dir() {
+  if [[ -n "$CLI_DIR" ]]; then
+    return 0
+  fi
+
+  if [[ -n "${HOMEBREW_PREFIX:-}" ]]; then
+    CLI_DIR="$HOMEBREW_PREFIX/bin"
+    return 0
+  fi
+
+  if command -v brew >/dev/null 2>&1; then
+    local brew_prefix
+    brew_prefix="$(brew --prefix 2>/dev/null || true)"
+    if [[ -n "$brew_prefix" ]]; then
+      CLI_DIR="$brew_prefix/bin"
+      return 0
+    fi
+  fi
+
+  CLI_DIR="/usr/local/bin"
 }
 
 safe_remove_path() {
@@ -83,6 +105,9 @@ safe_remove_cli_path() {
 }
 
 verify_base_dir
+detect_cli_dir
+CLI_STATUS="$CLI_DIR/security-monitor"
+CLI_UPDATE="$CLI_DIR/security-monitor-update"
 
 info "Removing Mac Security Monitor..."
 

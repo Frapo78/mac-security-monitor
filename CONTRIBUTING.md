@@ -23,7 +23,7 @@ Project author and maintainer: **Francesco Poltero**
 Run:
 
 ```bash
-zsh -n src/maccheck src/maccheck-alert src/securitycheck-status src/security-monitor-update src/update-check.sh src/update-install.sh
+zsh -n src/maccheck src/maccheck-alert src/securitycheck-status src/security-monitor-update src/reinstall.sh src/update-check.sh src/update-install.sh
 zsh -n installer/install.sh installer/uninstall.sh
 plutil -lint launchd/com.frapo78.securitycheck.plist
 ```
@@ -31,7 +31,7 @@ plutil -lint launchd/com.frapo78.securitycheck.plist
 If available:
 
 ```bash
-shellcheck -s bash -x src/maccheck src/maccheck-alert src/securitycheck-status src/security-monitor-update src/update-check.sh src/update-install.sh installer/install.sh installer/uninstall.sh
+shellcheck -s bash -x src/maccheck src/maccheck-alert src/securitycheck-status src/security-monitor-update src/reinstall.sh src/update-check.sh src/update-install.sh installer/install.sh installer/uninstall.sh
 ```
 
 ## Pull Request Checklist

@@ -24,9 +24,9 @@ LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 LAUNCH_AGENT_LABEL="com.frapo78.securitycheck"
 LAUNCH_AGENT_FILE="$LAUNCH_AGENTS_DIR/${LAUNCH_AGENT_LABEL}.plist"
 
-CLI_DIR="${CLI_DIR:-/usr/local/bin}"
-CLI_STATUS="$CLI_DIR/security-monitor"
-CLI_UPDATE="$CLI_DIR/security-monitor-update"
+CLI_DIR="${CLI_DIR:-}"
+CLI_STATUS=""
+CLI_UPDATE=""
 
 MSM_INSTALL_NONINTERACTIVE="${MSM_INSTALL_NONINTERACTIVE:-0}"
 MSM_AUTO_UPDATE_CHECK="${MSM_AUTO_UPDATE_CHECK:-false}"
@@ -52,6 +52,30 @@ write_file() {
   local destination_file="$2"
   local mode="$3"
   install -m "$mode" "$source_file" "$destination_file"
+}
+
+detect_cli_dir() {
+  if [[ -n "$CLI_DIR" ]]; then
+    return 0
+  fi
+
+  if [[ -n "${HOMEBREW_PREFIX:-}" ]]; then
+    CLI_DIR="$HOMEBREW_PREFIX/bin"
+    info "Detected Homebrew prefix from environment: $HOMEBREW_PREFIX"
+    return 0
+  fi
+
+  if command -v brew >/dev/null 2>&1; then
+    local brew_prefix
+    brew_prefix="$(brew --prefix 2>/dev/null || true)"
+    if [[ -n "$brew_prefix" ]]; then
+      CLI_DIR="$brew_prefix/bin"
+      info "Detected Homebrew installation: $brew_prefix"
+      return 0
+    fi
+  fi
+
+  CLI_DIR="/usr/local/bin"
 }
 
 create_symlink() {
@@ -125,6 +149,11 @@ verify_path_safety
 
 [[ -f "$VERSION_SRC" ]] || fail "Missing VERSION file at repository root."
 
+detect_cli_dir
+CLI_STATUS="$CLI_DIR/security-monitor"
+CLI_UPDATE="$CLI_DIR/security-monitor-update"
+info "CLI directory: $CLI_DIR"
+
 info "Creating runtime directories..."
 mkdir -p "$BIN_DIR" "$DOC_DIR" "$BASELINE_DIR" "$LOG_DIR" "$STATE_DIR" "$LAUNCH_AGENTS_DIR"
 ok "Directories ready."
@@ -134,6 +163,7 @@ write_file "$PROJECT_ROOT/src/maccheck" "$BIN_DIR/maccheck" 0755
 write_file "$PROJECT_ROOT/src/maccheck-alert" "$BIN_DIR/maccheck-alert" 0755
 write_file "$PROJECT_ROOT/src/securitycheck-status" "$BIN_DIR/securitycheck-status" 0755
 write_file "$PROJECT_ROOT/src/security-monitor-update" "$BIN_DIR/security-monitor-update" 0755
+write_file "$PROJECT_ROOT/src/reinstall.sh" "$BIN_DIR/reinstall.sh" 0755
 write_file "$PROJECT_ROOT/src/update-check.sh" "$BIN_DIR/update-check.sh" 0755
 write_file "$PROJECT_ROOT/src/update-install.sh" "$BIN_DIR/update-install.sh" 0755
 ok "Scripts installed."
@@ -186,25 +216,27 @@ info "Verifying installation..."
 [[ -x "$BIN_DIR/maccheck-alert" ]] || fail "maccheck-alert is not executable."
 [[ -x "$BIN_DIR/securitycheck-status" ]] || fail "securitycheck-status is not executable."
 [[ -x "$BIN_DIR/security-monitor-update" ]] || fail "security-monitor-update is not executable."
+[[ -x "$BIN_DIR/reinstall.sh" ]] || fail "reinstall.sh is not executable."
 [[ -x "$BIN_DIR/update-check.sh" ]] || fail "update-check.sh is not executable."
 [[ -x "$BIN_DIR/update-install.sh" ]] || fail "update-install.sh is not executable."
 [[ -f "$BASELINE_FILE" ]] || fail "Baseline file missing after install."
 [[ -f "$LAUNCH_AGENT_FILE" ]] || fail "LaunchAgent plist missing after install."
 [[ -f "$CONFIG_FILE" ]] || fail "Configuration file missing after install."
 
-if launchctl list | grep -q "$LAUNCH_AGENT_LABEL"; then
+if launchctl print "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1; then
   ok "LaunchAgent is active."
 else
-  warn "LaunchAgent not visible in launchctl list; re-login may be required."
+  warn "LaunchAgent not visible via launchctl print; re-login may be required."
 fi
 
 log_event "Installation completed successfully."
 ok "Installation complete."
 echo
 echo "Try: security-monitor"
-echo "Update baseline: security-monitor-update"
+echo "Update baseline: security-monitor update-baseline"
 echo "Version: security-monitor --version"
 echo "Check updates: security-monitor check-update"
 echo "Upgrade: security-monitor upgrade"
+echo "Reinstall: security-monitor reinstall"
 echo "Log: security-monitor log"
 echo "Last change: security-monitor last-change"
