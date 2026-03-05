@@ -1,7 +1,7 @@
 class MacSecurityMonitor < Formula
   desc "Lightweight integrity monitor for macOS using baseline comparison"
   homepage "https://github.com/Frapo78/mac-security-monitor"
-  url "https://github.com/Frapo78/mac-security-monitor/archive/refs/tags/v1.0.2.tar.gz"
+  url "https://github.com/Frapo78/mac-security-monitor/archive/refs/tags/v1.0.3.tar.gz"
   sha256 "REPLACE_WITH_RELEASE_ARCHIVE_SHA256"
   license "MIT"
 

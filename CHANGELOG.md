@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and the project follows Semantic Versioning.
 
+## [1.0.3] - 2026-03-05
+
+Stability and recovery release for **Mac Security Monitor**.
+
+### Added
+
+- New bootstrap installer at repository root: `install.sh`.
+- One-line installation support using `curl | zsh`.
+- Disaster recovery mode for installer: `installer/install.sh --disaster-recovery`.
+- Recovery backup path for previous logs: `~/.mac-security-monitor-recovery/<timestamp>/logs/`.
+
+### Changed
+
+- Hardened installer workflow for partial or broken installations.
+- Added cleanup of stale runtime/intermediate files during disaster recovery.
+- Improved install workflow messaging and recovery logging.
+- Updated README with one-line install and disaster recovery instructions.
+- Updated Homebrew formula example to v1.0.3 archive URL.
+
+### Author
+
+Francesco Poltero
+
 ## [1.0.2] - 2026-03-05
 
 Architecture refactor release for **Mac Security Monitor**.

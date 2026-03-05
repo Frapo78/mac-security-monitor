@@ -32,10 +32,25 @@ MSM_INSTALL_NONINTERACTIVE="${MSM_INSTALL_NONINTERACTIVE:-0}"
 MSM_AUTO_UPDATE_CHECK="${MSM_AUTO_UPDATE_CHECK:-false}"
 MSM_PRESERVE_BASELINE="${MSM_PRESERVE_BASELINE:-1}"
 
+DISASTER_RECOVERY=0
+RECOVERY_ROOT="${MSM_RECOVERY_ROOT:-$HOME/.mac-security-monitor-recovery}"
+RECOVERY_SESSION_DIR=""
+BACKUP_TMP_DIR=""
+
 info() { echo "[INFO] $*"; }
 ok() { echo "[OK]   $*"; }
 warn() { echo "[WARN] $*"; }
 fail() { echo "[ERROR] $*"; exit 1; }
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  installer/install.sh [--disaster-recovery]
+
+Options:
+  --disaster-recovery   Perform cleanup + reinstall while preserving baseline/config
+USAGE
+}
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
@@ -147,6 +162,86 @@ install_source_tree() {
   fi
 }
 
+prepare_disaster_recovery() {
+  local now_tag
+  now_tag="$(date '+%Y%m%d-%H%M%S')"
+
+  RECOVERY_SESSION_DIR="$RECOVERY_ROOT/$now_tag"
+  BACKUP_TMP_DIR="$(mktemp -d -t mac-security-monitor-recovery.XXXXXX)"
+
+  mkdir -p "$RECOVERY_SESSION_DIR"
+
+  info "Disaster recovery mode enabled."
+  info "Saving recoverable artifacts..."
+
+  if [[ -d "$LOG_DIR" ]]; then
+    mkdir -p "$RECOVERY_SESSION_DIR/logs"
+    cp -R "$LOG_DIR/." "$RECOVERY_SESSION_DIR/logs/" 2>/dev/null || true
+  fi
+
+  if [[ -f "$BASELINE_FILE" ]]; then
+    mkdir -p "$BACKUP_TMP_DIR/baseline"
+    cp -f "$BASELINE_FILE" "$BACKUP_TMP_DIR/baseline/current"
+  fi
+
+  if [[ -f "$CONFIG_FILE" ]]; then
+    cp -f "$CONFIG_FILE" "$BACKUP_TMP_DIR/config"
+  fi
+
+  launchctl bootout "gui/$(id -u)" "$LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+  launchctl disable "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1 || true
+
+  rm -f "$LAUNCH_AGENT_FILE"
+
+  info "Cleaning stale runtime files..."
+  rm -rf "$BIN_DIR" "$DOC_DIR" "$BASE_DIR/tmp" "$BASE_DIR/staging"
+  find "$BASE_DIR" -maxdepth 2 -type f \( -name '*.tmp' -o -name '*~' -o -name '*.swp' \) -delete 2>/dev/null || true
+
+  ok "Recovery preparation completed."
+}
+
+restore_recovery_state() {
+  if [[ -z "$BACKUP_TMP_DIR" || ! -d "$BACKUP_TMP_DIR" ]]; then
+    return 0
+  fi
+
+  info "Restoring preserved baseline and configuration..."
+
+  if [[ -f "$BACKUP_TMP_DIR/baseline/current" ]]; then
+    mkdir -p "$BASELINE_DIR"
+    cp -f "$BACKUP_TMP_DIR/baseline/current" "$BASELINE_FILE"
+  fi
+
+  if [[ -f "$BACKUP_TMP_DIR/config" ]]; then
+    cp -f "$BACKUP_TMP_DIR/config" "$CONFIG_FILE"
+  fi
+
+  ok "Recovery state restored."
+}
+
+cleanup() {
+  if [[ -n "$BACKUP_TMP_DIR" && -d "$BACKUP_TMP_DIR" ]]; then
+    rm -rf "$BACKUP_TMP_DIR"
+  fi
+}
+trap cleanup EXIT
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --disaster-recovery)
+      DISASTER_RECOVERY=1
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "Unknown argument: $1"
+      ;;
+  esac
+  shift
+done
+
 info "Installing Mac Security Monitor..."
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "This installer supports macOS only."
@@ -166,6 +261,10 @@ CLI_STATUS="$CLI_DIR/security-monitor"
 CLI_UPDATE="$CLI_DIR/security-monitor-update"
 info "CLI directory: $CLI_DIR"
 
+if [[ "$DISASTER_RECOVERY" == "1" ]]; then
+  prepare_disaster_recovery
+fi
+
 info "Creating runtime directories..."
 mkdir -p "$DOC_DIR" "$BASELINE_DIR" "$LOG_DIR" "$STATE_DIR" "$LAUNCH_AGENTS_DIR"
 ok "Directories ready."
@@ -181,6 +280,10 @@ ok "Documentation and version installed."
 
 configure_auto_update_check
 
+if [[ "$DISASTER_RECOVERY" == "1" ]]; then
+  restore_recovery_state
+fi
+
 if [[ -f "$BASELINE_FILE" && "$MSM_PRESERVE_BASELINE" == "1" ]]; then
   info "Keeping existing baseline at $BASELINE_FILE"
 else
@@ -191,19 +294,13 @@ else
 fi
 
 info "Installing LaunchAgent..."
-tmp_plist=""
-cleanup() {
-  if [[ -n "$tmp_plist" ]]; then
-    rm -f "$tmp_plist"
-  fi
-}
-trap cleanup EXIT
 tmp_plist="$(mktemp -t mac-security-monitor-plist.XXXXXX)"
 
 sed -e "s|__BASE_DIR__|$BASE_DIR|g" "$PROJECT_ROOT/launchd/com.frapo78.securitycheck.plist" >"$tmp_plist"
 
 plutil -lint "$tmp_plist" >/dev/null || fail "Generated LaunchAgent plist is invalid."
 cp -f "$tmp_plist" "$LAUNCH_AGENT_FILE"
+rm -f "$tmp_plist"
 
 launchctl bootout "gui/$(id -u)" "$LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
 launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT_FILE"
@@ -235,8 +332,15 @@ else
   warn "LaunchAgent not visible via launchctl print; re-login may be required."
 fi
 
-log_event "Installation completed successfully."
-ok "Installation complete."
+if [[ "$DISASTER_RECOVERY" == "1" ]]; then
+  log_event "Disaster recovery reinstall completed successfully."
+  ok "Disaster recovery completed."
+  echo "Recovery logs saved to: $RECOVERY_SESSION_DIR"
+else
+  log_event "Installation completed successfully."
+  ok "Installation complete."
+fi
+
 echo
 echo "Try: security-monitor"
 echo "Update baseline: security-monitor update-baseline"

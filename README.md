@@ -1,6 +1,6 @@
 # Mac Security Monitor
 
-![Version](https://img.shields.io/badge/version-1.0.2-blue)
+![Version](https://img.shields.io/badge/version-1.0.3-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20Ventura%20%7C%20Sonoma-black)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/github/actions/workflow/status/Frapo78/mac-security-monitor/ci.yml?label=CI)
@@ -18,6 +18,7 @@ Created by **Francesco Poltero**.
 - Status, baseline management, and update CLI commands
 - Optional OTA update checks and user-confirmed upgrades
 - Safe reinstall command that preserves user data
+- Bootstrap installer for one-line setup and disaster recovery
 
 ## Security Philosophy
 
@@ -30,69 +31,36 @@ Mac Security Monitor is designed to be:
 
 It uses periodic integrity snapshots rather than intrusive system monitoring.
 
-## Problem It Solves
-
-macOS users often have no simple way to detect unexpected system changes.
-
-Existing tools are often:
-
-- complex
-- intrusive
-- difficult to audit
-
-Mac Security Monitor provides a transparent alternative.
-
 ## Architecture Overview
 
 ```text
 mac-security-monitor/
+├─ install.sh                   # Bootstrap installer (curl-friendly)
 ├─ src/
-│  ├─ security-monitor          # Main CLI dispatcher
-│  ├─ lib/
-│  │  └─ common.sh              # Shared paths and utility functions
+│  ├─ security-monitor
+│  ├─ lib/common.sh
 │  ├─ commands/
-│  │  ├─ status.sh
-│  │  ├─ check-update.sh
-│  │  ├─ upgrade.sh
-│  │  ├─ reinstall.sh
-│  │  ├─ report.sh              # Placeholder
-│  │  └─ audit.sh               # Placeholder
 │  ├─ maccheck
 │  ├─ maccheck-alert
-│  ├─ securitycheck-status      # Compatibility entrypoint
-│  ├─ security-monitor-update   # Compatibility entrypoint
-│  ├─ update-check.sh           # Compatibility entrypoint
-│  └─ update-install.sh         # Compatibility entrypoint
+│  └─ compatibility entrypoints
 ├─ installer/
-│  ├─ install.sh
+│  ├─ install.sh                # Full installer (supports disaster recovery)
 │  └─ uninstall.sh
-├─ launchd/
-│  └─ com.frapo78.securitycheck.plist
-├─ docs/
-│  ├─ README.md
-│  └─ images/
-│     └─ screenshot-placeholder.svg
-├─ mac-security-monitor.rb
-├─ ROADMAP.md
-├─ .github/workflows/ci.yml
+├─ launchd/com.frapo78.securitycheck.plist
+├─ docs/README.md
 ├─ VERSION
-├─ LICENSE
-├─ CHANGELOG.md
-├─ CONTRIBUTING.md
-└─ .gitignore
+└─ CHANGELOG.md
 ```
-
-## Architecture
-
-The tool uses a shared core library (`src/lib/common.sh`) to keep path handling, logging, and utility logic in one place.
-
-The main CLI (`src/security-monitor`) dispatches subcommands to small modules in `src/commands/`. This keeps each command focused and easy to audit.
-
-The monitoring pipeline remains simple: `maccheck` captures a snapshot, `maccheck-alert` compares it with the baseline, and `launchd` schedules periodic execution.
 
 ## Installation
 
-### From source
+### One-line install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Frapo78/mac-security-monitor/main/install.sh | zsh
+```
+
+### From source repository
 
 ```bash
 cd /path/to/mac-security-monitor
@@ -111,6 +79,26 @@ brew install mac-security-monitor
 ```bash
 brew install ./mac-security-monitor.rb
 ```
+
+## Disaster Recovery Install
+
+If your local installation is broken or partially updated, run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Frapo78/mac-security-monitor/main/install.sh | zsh -s -- --disaster-recovery
+```
+
+Disaster recovery mode will:
+
+- stop and reload LaunchAgent safely
+- preserve baseline and configuration when possible
+- save existing logs to a recovery directory
+- clean stale runtime files and intermediate artifacts
+- perform a clean reinstall of scripts
+
+Recovery logs are saved under:
+
+- `~/.mac-security-monitor-recovery/<timestamp>/logs/`
 
 ## CLI Usage
 
@@ -151,13 +139,6 @@ Development priorities are tracked in the public roadmap:
 
 [ROADMAP.md](./ROADMAP.md)
 
-## How Monitoring Works
-
-1. `maccheck` creates a system integrity snapshot.
-2. `maccheck-alert` compares it with baseline `~/.mac-security-monitor/baseline/current`.
-3. If differences are detected, the tool records the event and shows a GUI dialog.
-4. Monitoring runs from `launchd` with label `com.frapo78.securitycheck`.
-
 ## Logging
 
 - Main log: `~/.mac-security-monitor/logs/monitor.log`
@@ -171,21 +152,6 @@ Development priorities are tracked in the public roadmap:
   - `https://raw.githubusercontent.com/Frapo78/mac-security-monitor/main/VERSION`
 - No background auto-upgrade is performed.
 - Users can inspect scripts before running upgrades or reinstalls.
-
-## Troubleshooting
-
-If LaunchAgent is not loaded:
-
-```bash
-launchctl list | grep com.frapo78.securitycheck
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.frapo78.securitycheck.plist
-```
-
-If baseline is missing:
-
-```bash
-~/.mac-security-monitor/bin/maccheck > ~/.mac-security-monitor/baseline/current
-```
 
 ## Uninstall
 
