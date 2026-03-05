@@ -51,7 +51,10 @@ run_installer() {
 }
 
 # If executed from a local clone, run local installer directly.
-SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)"
+SCRIPT_DIR=""
+if SCRIPT_DIR_CANDIDATE="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"; then
+  SCRIPT_DIR="$SCRIPT_DIR_CANDIDATE"
+fi
 if [[ -n "$SCRIPT_DIR" && -x "$SCRIPT_DIR/installer/install.sh" ]]; then
   run_installer "$SCRIPT_DIR/installer/install.sh"
   exit 0
