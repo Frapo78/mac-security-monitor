@@ -49,12 +49,7 @@ jobs:
       - name: Validate LaunchAgent plist
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-import plistlib
-with open('launchd/com.frapo78.securitycheck.plist', 'rb') as f:
-    plistlib.load(f)
-print('LaunchAgent plist is valid XML/plist.')
-PY
+          python3 -c "import plistlib; plistlib.load(open('launchd/com.frapo78.securitycheck.plist','rb')); print('LaunchAgent plist is valid XML/plist.')"
 
       - name: Run shellcheck
         run: |
