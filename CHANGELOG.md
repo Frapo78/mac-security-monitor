@@ -12,6 +12,7 @@ First public release candidate of **Mac Security Monitor**.
 
 - `VERSION` file with `1.0.0`.
 - New `src/security-monitor-update` script for baseline update workflow.
+- New OTA scripts: `src/update-check.sh` and `src/update-install.sh`.
 - Optional logging under `~/.mac-security-monitor/logs/monitor.log`.
 - GitHub CI workflow at `.github/workflows/ci.yml`.
 - README badges and screenshot placeholder asset.
@@ -24,6 +25,8 @@ First public release candidate of **Mac Security Monitor**.
 - Improved uninstaller safety to remove only recognized project artifacts.
 - Hardened LaunchAgent template with explicit `zsh` invocation, controlled environment variables, and dedicated log files.
 - Added `--version` support to status command (`security-monitor --version`).
+- Added update subcommands to `security-monitor`: `check-update`, `upgrade`, and `update-baseline`.
+- Added optional daily update check notifications controlled by `~/.mac-security-monitor/config`.
 
 ### Author
 

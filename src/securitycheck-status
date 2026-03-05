@@ -48,7 +48,22 @@ Usage:
   security-monitor --version
   security-monitor log
   security-monitor last-change
+  security-monitor update-baseline
+  security-monitor check-update
+  security-monitor upgrade
 USAGE
+}
+
+run_update_baseline() {
+  exec "$BIN_DIR/security-monitor-update"
+}
+
+run_check_update() {
+  exec "$BIN_DIR/update-check.sh"
+}
+
+run_upgrade() {
+  exec "$BIN_DIR/update-install.sh"
 }
 
 case "${1:-}" in
@@ -65,6 +80,15 @@ case "${1:-}" in
   "last-change")
     print_last_change
     exit 0
+    ;;
+  "update-baseline")
+    run_update_baseline
+    ;;
+  "check-update")
+    run_check_update
+    ;;
+  "upgrade")
+    run_upgrade
     ;;
   "help"|"--help"|"-h")
     print_usage
@@ -121,6 +145,19 @@ if [[ -x "$BIN_DIR/maccheck-alert" ]]; then
   echo "maccheck-alert: executable"
 else
   echo "maccheck-alert: missing or not executable"
+fi
+
+echo
+if [[ -x "$BIN_DIR/update-check.sh" ]]; then
+  echo "update-check.sh: executable"
+else
+  echo "update-check.sh: missing or not executable"
+fi
+
+if [[ -x "$BIN_DIR/update-install.sh" ]]; then
+  echo "update-install.sh: executable"
+else
+  echo "update-install.sh: missing or not executable"
 fi
 
 echo

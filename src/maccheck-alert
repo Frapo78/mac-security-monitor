@@ -4,7 +4,8 @@
 # Author: Francesco Poltero
 #
 # Runs periodically from launchd, compares current state with baseline,
-# and shows a user dialog when changes are detected.
+# shows a user dialog when changes are detected, and optionally checks
+# for new versions once per day.
 
 set -euo pipefail
 
@@ -14,8 +15,10 @@ BASELINE_FILE="$BASE_DIR/baseline/current"
 DOC_FILE="$BASE_DIR/docs/README.md"
 LOG_DIR="$BASE_DIR/logs"
 STATE_DIR="$BASE_DIR/state"
+CONFIG_FILE="$BASE_DIR/config"
 MONITOR_LOG="$LOG_DIR/monitor.log"
 LAST_CHANGE_FILE="$STATE_DIR/last-change"
+LAST_UPDATE_CHECK_FILE="$STATE_DIR/last-update-check"
 LAUNCH_AGENT_LABEL="com.frapo78.securitycheck"
 LAUNCH_AGENT_PLIST="$HOME/Library/LaunchAgents/${LAUNCH_AGENT_LABEL}.plist"
 MSM_LOGGING="${MSM_LOGGING:-1}"
@@ -47,6 +50,65 @@ notify() {
   osascript -e "display notification \"$text\" with title \"Mac Security Monitor\"" >/dev/null 2>&1 || true
 }
 
+auto_update_check_enabled() {
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    return 1
+  fi
+
+  local value
+  value="$(grep -E '^AUTO_UPDATE_CHECK=' "$CONFIG_FILE" | tail -n 1 | cut -d '=' -f 2 | tr '[:upper:]' '[:lower:]' || true)"
+  [[ "$value" == "true" ]]
+}
+
+should_run_daily_update_check() {
+  mkdir -p "$STATE_DIR" 2>/dev/null || return 1
+
+  if [[ ! -f "$LAST_UPDATE_CHECK_FILE" ]]; then
+    return 0
+  fi
+
+  local now_ts last_ts
+  now_ts="$(date +%s)"
+  last_ts="$(stat -f '%m' "$LAST_UPDATE_CHECK_FILE" 2>/dev/null || echo 0)"
+
+  (( now_ts - last_ts >= 86400 ))
+}
+
+run_update_check_if_enabled() {
+  if ! auto_update_check_enabled; then
+    return 0
+  fi
+
+  if ! should_run_daily_update_check; then
+    return 0
+  fi
+
+  touch "$LAST_UPDATE_CHECK_FILE" 2>/dev/null || true
+
+  if [[ ! -x "$BIN_DIR/update-check.sh" ]]; then
+    log_event "WARN: update check requested but update-check.sh is missing."
+    return 0
+  fi
+
+  set +e
+  "$BIN_DIR/update-check.sh" --quiet
+  local rc=$?
+  set -e
+
+  case "$rc" in
+    10)
+      log_event "A newer version is available."
+      notify "A new version of Mac Security Monitor is available."
+      ;;
+    0)
+      log_event "Automatic update check: no new version available."
+      ;;
+    *)
+      log_event "WARN: automatic update check failed with exit code $rc."
+      ;;
+  esac
+}
+
 if [[ ! -x "$BIN_DIR/maccheck" ]]; then
   log_event "ERROR: missing executable $BIN_DIR/maccheck"
   exit 1
@@ -63,6 +125,7 @@ if ! "$BIN_DIR/maccheck" >"$TMP_FILE"; then
 fi
 
 log_event "Monitor execution completed."
+run_update_check_if_enabled
 
 if cmp -s "$BASELINE_FILE" "$TMP_FILE"; then
   log_event "No baseline changes detected."

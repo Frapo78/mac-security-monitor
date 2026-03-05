@@ -15,6 +15,7 @@ BASELINE_DIR="$BASE_DIR/baseline"
 BASELINE_FILE="$BASELINE_DIR/current"
 LOG_DIR="$BASE_DIR/logs"
 STATE_DIR="$BASE_DIR/state"
+CONFIG_FILE="$BASE_DIR/config"
 MONITOR_LOG="$LOG_DIR/monitor.log"
 VERSION_SRC="$PROJECT_ROOT/VERSION"
 VERSION_DST="$BASE_DIR/VERSION"
@@ -26,6 +27,10 @@ LAUNCH_AGENT_FILE="$LAUNCH_AGENTS_DIR/${LAUNCH_AGENT_LABEL}.plist"
 CLI_DIR="${CLI_DIR:-/usr/local/bin}"
 CLI_STATUS="$CLI_DIR/security-monitor"
 CLI_UPDATE="$CLI_DIR/security-monitor-update"
+
+MSM_INSTALL_NONINTERACTIVE="${MSM_INSTALL_NONINTERACTIVE:-0}"
+MSM_AUTO_UPDATE_CHECK="${MSM_AUTO_UPDATE_CHECK:-false}"
+MSM_PRESERVE_BASELINE="${MSM_PRESERVE_BASELINE:-1}"
 
 info() { echo "[INFO] $*"; }
 ok() { echo "[OK]   $*"; }
@@ -67,6 +72,45 @@ verify_path_safety() {
   [[ "$BASE_DIR" != "/" && "$BASE_DIR" != "$HOME" && -n "$BASE_DIR" ]] || fail "Unsafe BASE_DIR: $BASE_DIR"
 }
 
+write_update_config() {
+  local enabled="$1"
+  cat >"$CONFIG_FILE" <<CONFIG
+# Mac Security Monitor configuration
+# Author: Francesco Poltero
+AUTO_UPDATE_CHECK=$enabled
+CONFIG
+}
+
+configure_auto_update_check() {
+  if [[ -f "$CONFIG_FILE" ]]; then
+    info "Keeping existing update-check configuration at $CONFIG_FILE"
+    return 0
+  fi
+
+  local enabled="false"
+
+  if [[ "$MSM_INSTALL_NONINTERACTIVE" == "1" ]]; then
+    if [[ "$MSM_AUTO_UPDATE_CHECK" == "true" ]]; then
+      enabled="true"
+    fi
+    write_update_config "$enabled"
+    ok "Automatic update check configured: $enabled"
+    return 0
+  fi
+
+  if [[ -t 0 ]]; then
+    printf 'Enable automatic update checks? (recommended) [y/N] '
+    local answer=""
+    read -r answer || true
+    if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+      enabled="true"
+    fi
+  fi
+
+  write_update_config "$enabled"
+  ok "Automatic update check configured: $enabled"
+}
+
 info "Installing Mac Security Monitor..."
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "This installer supports macOS only."
@@ -90,6 +134,8 @@ write_file "$PROJECT_ROOT/src/maccheck" "$BIN_DIR/maccheck" 0755
 write_file "$PROJECT_ROOT/src/maccheck-alert" "$BIN_DIR/maccheck-alert" 0755
 write_file "$PROJECT_ROOT/src/securitycheck-status" "$BIN_DIR/securitycheck-status" 0755
 write_file "$PROJECT_ROOT/src/security-monitor-update" "$BIN_DIR/security-monitor-update" 0755
+write_file "$PROJECT_ROOT/src/update-check.sh" "$BIN_DIR/update-check.sh" 0755
+write_file "$PROJECT_ROOT/src/update-install.sh" "$BIN_DIR/update-install.sh" 0755
 ok "Scripts installed."
 
 info "Installing documentation and version metadata..."
@@ -97,10 +143,16 @@ write_file "$PROJECT_ROOT/docs/README.md" "$DOC_DIR/README.md" 0644
 write_file "$VERSION_SRC" "$VERSION_DST" 0644
 ok "Documentation and version installed."
 
-info "Generating baseline..."
-"$BIN_DIR/maccheck" >"$BASELINE_FILE"
-log_event "Baseline created during installation."
-ok "Baseline generated at $BASELINE_FILE"
+configure_auto_update_check
+
+if [[ -f "$BASELINE_FILE" && "$MSM_PRESERVE_BASELINE" == "1" ]]; then
+  info "Keeping existing baseline at $BASELINE_FILE"
+else
+  info "Generating baseline..."
+  "$BIN_DIR/maccheck" >"$BASELINE_FILE"
+  log_event "Baseline created during installation."
+  ok "Baseline generated at $BASELINE_FILE"
+fi
 
 info "Installing LaunchAgent..."
 tmp_plist=""
@@ -134,8 +186,11 @@ info "Verifying installation..."
 [[ -x "$BIN_DIR/maccheck-alert" ]] || fail "maccheck-alert is not executable."
 [[ -x "$BIN_DIR/securitycheck-status" ]] || fail "securitycheck-status is not executable."
 [[ -x "$BIN_DIR/security-monitor-update" ]] || fail "security-monitor-update is not executable."
+[[ -x "$BIN_DIR/update-check.sh" ]] || fail "update-check.sh is not executable."
+[[ -x "$BIN_DIR/update-install.sh" ]] || fail "update-install.sh is not executable."
 [[ -f "$BASELINE_FILE" ]] || fail "Baseline file missing after install."
 [[ -f "$LAUNCH_AGENT_FILE" ]] || fail "LaunchAgent plist missing after install."
+[[ -f "$CONFIG_FILE" ]] || fail "Configuration file missing after install."
 
 if launchctl list | grep -q "$LAUNCH_AGENT_LABEL"; then
   ok "LaunchAgent is active."
@@ -149,5 +204,7 @@ echo
 echo "Try: security-monitor"
 echo "Update baseline: security-monitor-update"
 echo "Version: security-monitor --version"
+echo "Check updates: security-monitor check-update"
+echo "Upgrade: security-monitor upgrade"
 echo "Log: security-monitor log"
 echo "Last change: security-monitor last-change"

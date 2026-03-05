@@ -22,6 +22,8 @@ jobs:
             src/maccheck-alert
             src/securitycheck-status
             src/security-monitor-update
+            src/update-check.sh
+            src/update-install.sh
             installer/install.sh
             installer/uninstall.sh
           )
@@ -35,7 +37,13 @@ jobs:
       - name: Validate shell syntax
         run: |
           set -euo pipefail
-          zsh -n src/maccheck src/maccheck-alert src/securitycheck-status src/security-monitor-update
+          zsh -n \
+            src/maccheck \
+            src/maccheck-alert \
+            src/securitycheck-status \
+            src/security-monitor-update \
+            src/update-check.sh \
+            src/update-install.sh
           zsh -n installer/install.sh installer/uninstall.sh
 
       - name: Validate LaunchAgent plist
@@ -43,12 +51,12 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
 import plistlib
-with open('launchd/com.fra.securitycheck.plist', 'rb') as f:
+with open('launchd/com.frapo78.securitycheck.plist', 'rb') as f:
     plistlib.load(f)
 print('LaunchAgent plist is valid XML/plist.')
 PY
 
-      - name: Run shellcheck if available
+      - name: Run shellcheck
         run: |
           set -euo pipefail
           if ! command -v shellcheck >/dev/null 2>&1; then
@@ -60,5 +68,7 @@ PY
             src/maccheck-alert \
             src/securitycheck-status \
             src/security-monitor-update \
+            src/update-check.sh \
+            src/update-install.sh \
             installer/install.sh \
             installer/uninstall.sh
