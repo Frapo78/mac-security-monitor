@@ -34,6 +34,8 @@ jobs:
             src/commands/status.sh
             src/commands/update-baseline.sh
             src/commands/check-update.sh
+            src/commands/critical-check.sh
+            src/commands/self-test.sh
             src/commands/upgrade.sh
             src/commands/reinstall.sh
             src/commands/report.sh
@@ -69,6 +71,8 @@ jobs:
             src/commands/status.sh \
             src/commands/update-baseline.sh \
             src/commands/check-update.sh \
+            src/commands/critical-check.sh \
+            src/commands/self-test.sh \
             src/commands/upgrade.sh \
             src/commands/reinstall.sh \
             src/commands/report.sh \
@@ -105,9 +109,91 @@ jobs:
             src/commands/status.sh \
             src/commands/update-baseline.sh \
             src/commands/check-update.sh \
+            src/commands/critical-check.sh \
+            src/commands/self-test.sh \
             src/commands/upgrade.sh \
             src/commands/reinstall.sh \
             src/commands/report.sh \
             src/commands/audit.sh \
             installer/install.sh \
             installer/uninstall.sh
+
+  validate-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-13, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check executable permissions
+        run: |
+          set -euo pipefail
+          scripts=(
+            install.sh
+            src/security-monitor
+            src/maccheck
+            src/maccheck-alert
+            src/securitycheck-status
+            src/security-monitor-update
+            src/update-check.sh
+            src/update-install.sh
+            src/reinstall.sh
+            src/commands/help.sh
+            src/commands/version.sh
+            src/commands/log.sh
+            src/commands/last-change.sh
+            src/commands/status.sh
+            src/commands/update-baseline.sh
+            src/commands/check-update.sh
+            src/commands/critical-check.sh
+            src/commands/self-test.sh
+            src/commands/upgrade.sh
+            src/commands/reinstall.sh
+            src/commands/report.sh
+            src/commands/audit.sh
+            installer/install.sh
+            installer/uninstall.sh
+          )
+          for script in "${scripts[@]}"; do
+            if [[ ! -x "$script" ]]; then
+              echo "Script is not executable: $script"
+              exit 1
+            fi
+          done
+
+      - name: Validate shell syntax
+        run: |
+          set -euo pipefail
+          zsh -n \
+            install.sh \
+            src/security-monitor \
+            src/maccheck \
+            src/maccheck-alert \
+            src/securitycheck-status \
+            src/security-monitor-update \
+            src/update-check.sh \
+            src/update-install.sh \
+            src/reinstall.sh \
+            src/lib/common.sh \
+            src/commands/help.sh \
+            src/commands/version.sh \
+            src/commands/log.sh \
+            src/commands/last-change.sh \
+            src/commands/status.sh \
+            src/commands/update-baseline.sh \
+            src/commands/check-update.sh \
+            src/commands/critical-check.sh \
+            src/commands/self-test.sh \
+            src/commands/upgrade.sh \
+            src/commands/reinstall.sh \
+            src/commands/report.sh \
+            src/commands/audit.sh
+          zsh -n installer/install.sh installer/uninstall.sh
+
+      - name: Validate LaunchAgent plist
+        run: |
+          set -euo pipefail
+          plutil -lint launchd/com.frapo78.securitycheck.plist

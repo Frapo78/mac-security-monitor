@@ -30,6 +30,45 @@ notify() {
   osascript -e "display notification \"$text\" with title \"Mac Security Monitor\"" >/dev/null 2>&1 || true
 }
 
+prompt_critical_issues_action() {
+  if ! command -v osascript >/dev/null 2>&1; then
+    print_warn "osascript not available; keeping critical alerts active."
+    touch "$CRITICAL_ALERT_ACTIVE_FILE" 2>/dev/null || true
+    return 0
+  fi
+
+  local choice
+  choice="$(osascript <<'OSA'
+try
+  display dialog "Mac Security Monitor detected critical security issues on this system.\n\nChoose how to proceed." buttons {"Show Details", "Keep Baseline Anyway", "Keep Alert Active"} default button "Keep Alert Active" with title "Mac Security Monitor"
+  return button returned of result
+on error
+  return "Keep Alert Active"
+end try
+OSA
+)"
+
+  case "$choice" in
+    "Show Details")
+      if [[ -f "$CRITICAL_REPORT_FILE" ]]; then
+        open -a TextEdit "$CRITICAL_REPORT_FILE" >/dev/null 2>&1 || true
+      fi
+      prompt_critical_issues_action
+      ;;
+    "Keep Baseline Anyway")
+      rm -f "$FIRST_RUN_CHECK_FILE" "$CRITICAL_ALERT_ACTIVE_FILE" 2>/dev/null || true
+      log_event "User accepted baseline despite critical issue warnings."
+      notify "Baseline accepted despite critical warnings"
+      ;;
+    *)
+      touch "$CRITICAL_ALERT_ACTIVE_FILE" 2>/dev/null || true
+      rm -f "$FIRST_RUN_CHECK_FILE" 2>/dev/null || true
+      log_event "Critical alert mode kept active by user."
+      notify "Critical alert mode remains active"
+      ;;
+  esac
+}
+
 run_update_check_if_enabled() {
   if ! auto_update_check_enabled; then
     return 0
@@ -65,6 +104,20 @@ run_update_check_if_enabled() {
   esac
 }
 
+run_critical_security_check() {
+  if [[ ! -x "$BIN_DIR/commands/critical-check.sh" ]]; then
+    log_event "WARN: critical-check.sh is missing."
+    return 1
+  fi
+
+  set +e
+  "$BIN_DIR/commands/critical-check.sh" --quiet
+  local rc=$?
+  set -e
+
+  return "$rc"
+}
+
 if [[ ! -x "$BIN_DIR/maccheck" ]]; then
   log_event "ERROR: missing executable $BIN_DIR/maccheck"
   exit 1
@@ -82,6 +135,21 @@ fi
 
 log_event "Monitor execution completed."
 run_update_check_if_enabled
+
+if [[ -f "$FIRST_RUN_CHECK_FILE" || -f "$CRITICAL_ALERT_ACTIVE_FILE" ]]; then
+  if run_critical_security_check; then
+    rm -f "$FIRST_RUN_CHECK_FILE" "$CRITICAL_ALERT_ACTIVE_FILE" 2>/dev/null || true
+    log_event "Critical first-run security check passed."
+  else
+    rc=$?
+    if [[ "$rc" -eq 20 ]]; then
+      log_event "Critical issues detected during security check."
+      prompt_critical_issues_action
+    else
+      log_event "WARN: critical security check failed with exit code $rc."
+    fi
+  fi
+fi
 
 if cmp -s "$BASELINE_FILE" "$TMP_FILE"; then
   log_event "No baseline changes detected."

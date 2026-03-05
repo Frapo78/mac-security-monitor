@@ -13,6 +13,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=src/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
+MSM_DEEP_NETWORK="${MSM_DEEP_NETWORK:-0}"
+
 print_section() {
   local title="$1"
   echo
@@ -34,24 +36,173 @@ run_or_note() {
   echo "$note"
 }
 
-echo "=== Non-Apple Launch Agents (user domain) ==="
-if command_exists launchctl; then
-  launchctl list 2>/dev/null | grep -v "apple" | grep -v "^-" || true
-else
-  echo "launchctl command not available."
-fi
+sorted_list_dir() {
+  local dir_path="$1"
+  if [[ -d "$dir_path" ]]; then
+    ls -1 "$dir_path" 2>/dev/null | LC_ALL=C sort
+  else
+    echo "Directory not found: $dir_path"
+  fi
+}
 
-print_section "System Launch Daemons"
-run_or_note "Unable to list /Library/LaunchDaemons." ls -1 /Library/LaunchDaemons 2>/dev/null
+print_file_hash() {
+  local file_path="$1"
+  if command_exists shasum; then
+    shasum -a 256 "$file_path" 2>/dev/null | awk '{print $1}'
+  else
+    echo "hash-unavailable"
+  fi
+}
+
+print_code_signature_status() {
+  local binary_path="$1"
+
+  if [[ ! -e "$binary_path" ]]; then
+    echo "missing-binary"
+    return
+  fi
+
+  if ! command_exists codesign; then
+    echo "codesign-unavailable"
+    return
+  fi
+
+  if codesign --verify --deep --strict "$binary_path" >/dev/null 2>&1; then
+    echo "valid"
+  else
+    echo "invalid-or-unsigned"
+  fi
+}
+
+inspect_launchd_plists() {
+  local dir_path="$1"
+
+  if [[ ! -d "$dir_path" ]]; then
+    echo "Directory not found: $dir_path"
+    return
+  fi
+
+  local plist_path
+  while IFS= read -r plist_path; do
+    [[ -n "$plist_path" ]] || continue
+
+    local label=""
+    local program=""
+    local program_args0=""
+
+    if [[ -x /usr/libexec/PlistBuddy ]]; then
+      label="$(/usr/libexec/PlistBuddy -c 'Print :Label' "$plist_path" 2>/dev/null || true)"
+      program="$(/usr/libexec/PlistBuddy -c 'Print :Program' "$plist_path" 2>/dev/null || true)"
+      program_args0="$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments:0' "$plist_path" 2>/dev/null || true)"
+    fi
+
+    local exec_path="$program"
+    if [[ -z "$exec_path" ]]; then
+      exec_path="$program_args0"
+    fi
+
+    echo "File: $plist_path"
+    echo "  SHA256: $(print_file_hash "$plist_path")"
+    echo "  Label: ${label:-unavailable}"
+    echo "  Executable: ${exec_path:-unavailable}"
+
+    if [[ -n "$exec_path" ]]; then
+      echo "  Signature: $(print_code_signature_status "$exec_path")"
+    else
+      echo "  Signature: unavailable"
+    fi
+  done < <(find "$dir_path" -maxdepth 1 -type f -name '*.plist' 2>/dev/null | LC_ALL=C sort)
+}
+
+print_non_apple_launchctl_labels() {
+  if ! command_exists launchctl; then
+    echo "launchctl command not available."
+    return
+  fi
+
+  # Keep only labels to avoid PID/status volatility.
+  launchctl list 2>/dev/null \
+    | awk '{print $3}' \
+    | sed -E 's/(\.[0-9]+)+$//' \
+    | grep -v '^$' \
+    | grep -v '^application\.com\.apple\.' \
+    | grep -v '^com\.apple\.' \
+    | grep -v '^-' \
+    | LC_ALL=C sort -u
+}
+
+print_listening_tcp_summary() {
+  if ! command_exists lsof; then
+    echo "lsof command not available."
+    return
+  fi
+
+  # Keep stable fields only: command, user and endpoint.
+  lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null \
+    | awk 'NR>1 {print $1"|"$3"|"$9}' \
+    | LC_ALL=C sort -u
+}
+
+print_login_items_sorted() {
+  if ! command_exists osascript; then
+    echo "osascript command not available."
+    return
+  fi
+
+  local raw_items
+  raw_items="$(osascript -e 'tell application "System Events" to get the name of every login item' 2>/dev/null || true)"
+
+  if [[ -z "$raw_items" ]]; then
+    echo "No login items or unable to read login items."
+    return
+  fi
+
+  echo "$raw_items" \
+    | tr ',' '\n' \
+    | sed 's/^ *//; s/ *$//' \
+    | grep -v '^$' \
+    | LC_ALL=C sort -u
+}
+
+print_section "Non-Apple Launchctl Labels (user domain)"
+print_non_apple_launchctl_labels
+
+print_section "LaunchAgents in User Library"
+sorted_list_dir "$HOME/Library/LaunchAgents"
+
+print_section "LaunchAgents in System Library"
+sorted_list_dir "/Library/LaunchAgents"
+
+print_section "LaunchDaemons in System Library"
+sorted_list_dir "/Library/LaunchDaemons"
+
+print_section "LaunchAgent/LaunchDaemon Forensic Metadata"
+inspect_launchd_plists "$HOME/Library/LaunchAgents"
+inspect_launchd_plists "/Library/LaunchAgents"
+inspect_launchd_plists "/Library/LaunchDaemons"
 
 print_section "Applications in /Applications"
-run_or_note "Unable to list /Applications." ls -1 /Applications 2>/dev/null
+sorted_list_dir "/Applications"
 
-print_section "Listening TCP Ports"
-if command_exists lsof; then
-  run_or_note "Unable to inspect listening ports." lsof -nP -iTCP -sTCP:LISTEN
-else
-  echo "lsof command not available."
+print_section "Listening TCP Summary"
+print_listening_tcp_summary
+
+if [[ "$MSM_DEEP_NETWORK" == "1" ]]; then
+  print_section "Established TCP Connections (Deep Mode)"
+  if command_exists lsof; then
+    lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null \
+      | awk 'NR>1 {print $1"|"$3"|"$9}' \
+      | LC_ALL=C sort -u
+  else
+    echo "lsof command not available."
+  fi
+
+  print_section "Network Configuration Summary (Deep Mode)"
+  if command_exists scutil; then
+    scutil --dns 2>/dev/null | sed -n '1,120p'
+  else
+    echo "scutil command not available."
+  fi
 fi
 
 print_section "Non-Apple Kernel Extensions"
@@ -63,7 +214,57 @@ fi
 
 print_section "Setuid Binaries"
 run_or_note "Unable to scan standard binary directories for setuid files." \
-  find /usr/bin /usr/sbin /bin -perm -4000 -type f 2>/dev/null
+  find /usr/bin /usr/sbin /bin -perm -4000 -type f 2>/dev/null | LC_ALL=C sort
+
+print_section "User Login Items"
+print_login_items_sorted
+
+print_section "Cron and Periodic Tasks"
+if command_exists crontab; then
+  echo "User crontab:"
+  crontab -l 2>/dev/null || echo "No user crontab or access denied."
+else
+  echo "crontab command not available."
+fi
+
+echo
+echo "System cron files:"
+for cron_file in /etc/crontab /etc/anacrontab; do
+  if [[ -f "$cron_file" ]]; then
+    echo "- $cron_file"
+    sed -n '1,80p' "$cron_file" 2>/dev/null
+  fi
+done
+
+if [[ -d /etc/periodic ]]; then
+  echo "- /etc/periodic"
+  find /etc/periodic -type f 2>/dev/null | LC_ALL=C sort
+fi
+
+print_section "macOS Security Controls"
+if command_exists csrutil; then
+  csrutil status 2>/dev/null || true
+else
+  echo "csrutil command not available."
+fi
+
+if command_exists spctl; then
+  spctl --status 2>/dev/null || true
+else
+  echo "spctl command not available."
+fi
+
+if command_exists fdesetup; then
+  fdesetup status 2>/dev/null || true
+else
+  echo "fdesetup command not available."
+fi
+
+if [[ -x /usr/libexec/ApplicationFirewall/socketfilterfw ]]; then
+  /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null || true
+else
+  echo "socketfilterfw command not available."
+fi
 
 print_section "Configuration Profiles"
 if command_exists profiles; then

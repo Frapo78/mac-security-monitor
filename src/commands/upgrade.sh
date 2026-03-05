@@ -96,7 +96,7 @@ if ! tar -xzf "$archive_file" -C "$extract_dir"; then
   exit 1
 fi
 
-source_dir="$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+source_dir="$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d -print -quit)"
 [[ -n "$source_dir" ]] || {
   print_error "Invalid update package layout."
   exit 1
@@ -108,7 +108,8 @@ new_version_file="$source_dir/VERSION"
   exit 1
 }
 
-new_version="$(head -n 1 "$new_version_file" | tr -d '[:space:]')"
+IFS= read -r new_version <"$new_version_file"
+new_version="$(printf '%s' "$new_version" | tr -d '[:space:]')"
 if [[ "$(normalize_version "$new_version")" != "$(normalize_version "$latest_version")" ]]; then
   print_error "VERSION mismatch in downloaded package."
   exit 1

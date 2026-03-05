@@ -269,6 +269,11 @@ info "Creating runtime directories..."
 mkdir -p "$DOC_DIR" "$BASELINE_DIR" "$LOG_DIR" "$STATE_DIR" "$LAUNCH_AGENTS_DIR"
 ok "Directories ready."
 
+had_baseline_before_install=0
+if [[ -f "$BASELINE_FILE" ]]; then
+  had_baseline_before_install=1
+fi
+
 info "Installing source tree into $BIN_DIR..."
 install_source_tree
 ok "Source tree installed."
@@ -291,6 +296,11 @@ else
   "$BIN_DIR/maccheck" >"$BASELINE_FILE"
   log_event "Baseline created during installation."
   ok "Baseline generated at $BASELINE_FILE"
+fi
+
+if [[ "$had_baseline_before_install" -eq 0 ]]; then
+  touch "$STATE_DIR/first-run-security-check" 2>/dev/null || true
+  log_event "First-run critical security check scheduled."
 fi
 
 info "Installing LaunchAgent..."
@@ -322,6 +332,8 @@ info "Verifying installation..."
 [[ -x "$BIN_DIR/commands/check-update.sh" ]] || fail "commands/check-update.sh is not executable."
 [[ -x "$BIN_DIR/commands/upgrade.sh" ]] || fail "commands/upgrade.sh is not executable."
 [[ -x "$BIN_DIR/commands/reinstall.sh" ]] || fail "commands/reinstall.sh is not executable."
+[[ -x "$BIN_DIR/commands/critical-check.sh" ]] || fail "commands/critical-check.sh is not executable."
+[[ -x "$BIN_DIR/commands/self-test.sh" ]] || fail "commands/self-test.sh is not executable."
 [[ -f "$BASELINE_FILE" ]] || fail "Baseline file missing after install."
 [[ -f "$LAUNCH_AGENT_FILE" ]] || fail "LaunchAgent plist missing after install."
 [[ -f "$CONFIG_FILE" ]] || fail "Configuration file missing after install."
@@ -348,5 +360,6 @@ echo "Version: security-monitor --version"
 echo "Check updates: security-monitor check-update"
 echo "Upgrade: security-monitor upgrade"
 echo "Reinstall: security-monitor reinstall"
+echo "Self-test: security-monitor self-test"
 echo "Log: security-monitor log"
 echo "Last change: security-monitor last-change"

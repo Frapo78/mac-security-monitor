@@ -4,6 +4,46 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and the project follows Semantic Versioning.
 
+## [1.0.4] - 2026-03-05
+
+Forensic snapshot hardening release for **Mac Security Monitor**.
+
+### Added
+
+- Deeper forensic checks in `maccheck`:
+  - launchd plist metadata and SHA256
+  - executable signature status for startup entries
+  - login items and scheduled task visibility
+  - security control posture summary (SIP, Gatekeeper, FileVault, firewall)
+- Optional deep network mode for one-off investigations:
+  - `MSM_DEEP_NETWORK=1 ~/.mac-security-monitor/bin/maccheck`
+- First-run critical security check flow after clean install with user choice:
+  - keep baseline anyway
+  - keep critical alerts active
+  - review detailed report
+- New `security-monitor self-test` command for local smoke validation.
+- GitHub compatibility issue template for community validation reports.
+
+### Changed
+
+- Improved baseline snapshot determinism to reduce false positives.
+- Normalized launchd snapshot to labels only (avoids PID/status churn).
+- Filtered transient Apple app service labels that could appear intermittently and trigger false positives.
+- Replaced volatile default network output with stable listening summary.
+- Sorted key list-based sections for consistent baseline diffs.
+- Hardened command pipelines to avoid `set -euo pipefail` false failures (`exit 141`) in status and update flows.
+- Updated contribution and roadmap documentation for the 1.0.4 architecture and validation process.
+- Added macOS CI validation jobs for `macos-13` and `macos-14`.
+- Updated README with controlled-release compatibility guidance and feedback window.
+
+### Validation
+
+- Local stability stress test completed with 12 consecutive snapshots and zero diff.
+
+### Author
+
+Francesco Poltero
+
 ## [1.0.3] - 2026-03-05
 
 Stability and recovery release for **Mac Security Monitor**.
@@ -22,6 +62,7 @@ Stability and recovery release for **Mac Security Monitor**.
 - Improved install workflow messaging and recovery logging.
 - Updated README with one-line install and disaster recovery instructions.
 - Updated Homebrew formula example to v1.0.3 archive URL.
+- Expanded `maccheck` with deeper forensic checks for persistence, signatures, scheduled tasks, network state, and security control posture.
 
 ### Author
 

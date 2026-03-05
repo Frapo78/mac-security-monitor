@@ -61,6 +61,10 @@ case "$cmd" in
     shift
     exec "$COMMANDS_DIR/reinstall.sh" "$@"
     ;;
+  self-test)
+    shift
+    exec "$COMMANDS_DIR/self-test.sh" "$@"
+    ;;
   report)
     exec "$COMMANDS_DIR/report.sh"
     ;;

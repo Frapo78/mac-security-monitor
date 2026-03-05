@@ -22,7 +22,9 @@ USAGE
 }
 
 read_remote_version() {
-  curl -fsSL --max-time "$CURL_MAX_TIME" "$REMOTE_VERSION_URL" | head -n 1 | tr -d '[:space:]'
+  local remote_payload
+  remote_payload="$(curl -fsSL --max-time "$CURL_MAX_TIME" "$REMOTE_VERSION_URL")"
+  printf '%s\n' "$remote_payload" | sed -n '1p' | tr -d '[:space:]'
 }
 
 while [[ $# -gt 0 ]]; do

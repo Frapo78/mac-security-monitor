@@ -19,9 +19,9 @@ Core features:
 
 ---
 
-## v1.0.1 — Distribution Improvements
+## v1.0.1 — Distribution Improvements (Completed)
 
-Planned features:
+Delivered features:
 
 - Homebrew installation support
 - reinstall command
@@ -30,29 +30,51 @@ Planned features:
 
 ---
 
-## v1.0.2 — Reporting Improvements
+## v1.0.2 — Internal Refactor (Completed)
+
+Delivered features:
+
+- shared core library (`src/lib/common.sh`)
+- modular command dispatcher (`src/commands/`)
+- improved installer consistency and path handling
+- placeholder commands for future `report` and `audit` modules
+
+---
+
+## v1.0.3 — Installer and Recovery Hardening (Completed)
+
+Delivered features:
+
+- one-line bootstrap install script
+- disaster recovery reinstall mode
+- safer reinstall and upgrade flow
+- improved launchd handling and validation
+
+---
+
+## v1.0.4 — Forensic Snapshot Stability (Current)
+
+Delivered features:
+
+- deterministic snapshot normalization to reduce false positives
+- deeper forensic sections in `maccheck`
+- first-run critical security check with user decision flow
+- stability-focused command and pipeline hardening
+- controlled compatibility validation workflow (`security-monitor self-test` + community reports)
+
+---
+
+## v1.0.5 — Reporting and Triage (Planned)
 
 Planned features:
 
 - human-readable change reports
 - `security-monitor report` command
-- better log visualization
+- better log visualization and triage guidance
 
 ---
 
-## v1.0.3 — Security Audit Mode
-
-Planned features:
-
-- extended system audit
-- persistence detection
-- cron jobs inspection
-- login items detection
-- launch agent analysis
-
----
-
-## v1.1 — User Interface
+## v1.1 — User Interface (Planned)
 
 Planned features:
 

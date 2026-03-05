@@ -63,7 +63,7 @@ if ! tar -xzf "$archive_file" -C "$extract_dir"; then
   exit 1
 fi
 
-source_dir="$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+source_dir="$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d -print -quit)"
 [[ -n "$source_dir" ]] || { print_error "Invalid archive layout."; exit 1; }
 
 [[ -x "$source_dir/installer/install.sh" ]] || { print_error "Installer not found in downloaded package."; exit 1; }

@@ -21,6 +21,7 @@ Usage:
   security-monitor check-update
   security-monitor upgrade
   security-monitor reinstall
+  security-monitor self-test
   security-monitor report
   security-monitor audit
 USAGE

@@ -47,7 +47,7 @@ fi
 
 echo
 echo "Scripts:"
-for script in maccheck maccheck-alert security-monitor security-monitor-update reinstall.sh update-check.sh update-install.sh; do
+for script in maccheck maccheck-alert security-monitor security-monitor-update reinstall.sh update-check.sh update-install.sh commands/self-test.sh; do
   if [[ -x "$BIN_DIR/$script" ]]; then
     echo "$script: executable"
   else
@@ -58,7 +58,13 @@ done
 echo
 echo "maccheck sample output:"
 if [[ -x "$BIN_DIR/maccheck" ]]; then
-  "$BIN_DIR/maccheck" | head -n 5
+  sample_file="$(mktemp -t mac-security-monitor-status-sample.XXXXXX)"
+  if "$BIN_DIR/maccheck" >"$sample_file" 2>/dev/null; then
+    sed -n '1,5p' "$sample_file"
+  else
+    echo "Unavailable"
+  fi
+  rm -f "$sample_file"
 else
   echo "Unavailable"
 fi

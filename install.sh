@@ -79,7 +79,7 @@ curl -fsSL --max-time "$CURL_MAX_TIME" "$REPO_ARCHIVE_URL" -o "$ARCHIVE_FILE"
 echo "[INFO] Extracting package..."
 tar -xzf "$ARCHIVE_FILE" -C "$EXTRACT_DIR"
 
-SOURCE_DIR="$(find "$EXTRACT_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+SOURCE_DIR="$(find "$EXTRACT_DIR" -mindepth 1 -maxdepth 1 -type d -print -quit)"
 if [[ -z "$SOURCE_DIR" || ! -x "$SOURCE_DIR/installer/install.sh" ]]; then
   echo "[ERROR] Installer not found in downloaded package."
   exit 1
