@@ -1,0 +1,32 @@
+#!/bin/zsh
+
+echo "=== Security Monitor Status ==="
+
+echo
+echo "LaunchAgent:"
+launchctl list | grep com.fra.securitycheck || echo "Monitor NON attivo"
+
+echo
+echo "Baseline file:"
+if [[ -f ~/.mac-security-monitor/baseline/current ]]; then
+echo "Baseline presente"
+else
+echo "Baseline mancante"
+fi
+
+echo
+echo "Ultima modifica baseline:"
+stat -f "%Sm" ~/.mac-security-monitor/baseline/current
+
+echo
+echo "Script monitor:"
+if [[ -x ~/.mac-security-monitor/bin/maccheck-alert ]]; then
+echo "maccheck-alert OK"
+else
+echo "maccheck-alert non eseguibile"
+fi
+
+echo
+echo "Test maccheck:"
+~/.mac-security-monitor/bin/maccheck | head -n 5
+

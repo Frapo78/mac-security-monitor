@@ -1,0 +1,121 @@
+#!/bin/zsh
+
+# ==========================================================
+# MACCHECK
+# ----------------------------------------------------------
+# Script che raccoglie informazioni sullo stato di sicurezza
+# del sistema macOS.
+#
+# L'output di questo script viene confrontato con una
+# "baseline" salvata in:
+#
+#   ~/.security-baseline/current
+#
+# Se l'output cambia, il monitor segnala un possibile
+# cambiamento nel sistema.
+# ==========================================================
+
+
+# ----------------------------------------------------------
+# LaunchAgents non Apple
+# ----------------------------------------------------------
+# Mostra servizi utente caricati da launchd che non
+# appartengono ad Apple.
+#
+# Questo può rivelare:
+# - nuovi software installati
+# - possibili persistenze malware
+# ----------------------------------------------------------
+
+echo "=== LaunchAgents non Apple ==="
+launchctl list | grep -v apple | grep -v "^-"
+
+
+# ----------------------------------------------------------
+# LaunchDaemons
+# ----------------------------------------------------------
+# Mostra daemon di sistema installati.
+#
+# I daemon possono essere installati da:
+# - software legittimo
+# - driver
+# - strumenti di sistema
+# - malware persistente
+# ----------------------------------------------------------
+
+echo
+echo "=== LaunchDaemons ==="
+ls /Library/LaunchDaemons
+
+
+# ----------------------------------------------------------
+# Applicazioni installate
+# ----------------------------------------------------------
+# Lista delle applicazioni presenti in /Applications.
+#
+# Serve per rilevare nuove app installate nel sistema.
+# ----------------------------------------------------------
+
+echo
+echo "=== Applicazioni installate ==="
+ls /Applications
+
+
+# ----------------------------------------------------------
+# Porte di rete in ascolto
+# ----------------------------------------------------------
+# Mostra processi che hanno porte TCP aperte.
+#
+# Può rivelare:
+# - servizi di rete attivi
+# - server locali
+# - software che espone servizi
+# ----------------------------------------------------------
+
+echo
+echo "=== Porte in ascolto ==="
+lsof -nP -iTCP -sTCP:LISTEN
+
+
+# ----------------------------------------------------------
+# Kext non Apple
+# ----------------------------------------------------------
+# Verifica estensioni kernel non Apple.
+#
+# Le kext sono sensibili perché girano nel kernel.
+# ----------------------------------------------------------
+
+echo
+echo "=== Kext non Apple ==="
+kmutil showloaded 2>/dev/null | grep -v com.apple
+
+
+# ----------------------------------------------------------
+# Binari setuid
+# ----------------------------------------------------------
+# Mostra binari con privilegi elevati.
+#
+# Questi programmi possono essere eseguiti con privilegi
+# superiori all'utente corrente.
+# ----------------------------------------------------------
+
+echo
+echo "=== Binari setuid ==="
+find /usr/bin /usr/sbin /bin -perm -4000 -type f 2>/dev/null
+
+
+# ----------------------------------------------------------
+# Profili di configurazione
+# ----------------------------------------------------------
+# Controlla eventuali profili MDM installati nel sistema.
+#
+# I profili possono:
+# - configurare sicurezza
+# - controllare il sistema
+# - installare certificati
+# ----------------------------------------------------------
+
+echo
+echo "=== Profili di configurazione ==="
+profiles show -type configuration
+

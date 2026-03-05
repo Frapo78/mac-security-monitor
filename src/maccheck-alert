@@ -1,0 +1,108 @@
+#!/bin/zsh
+
+# ==========================================================
+# MACCHECK ALERT
+# ----------------------------------------------------------
+# Script eseguito automaticamente da launchd ogni ora.
+#
+# Funzionamento:
+#
+# 1. esegue maccheck
+# 2. salva l'output temporaneamente
+# 3. confronta con la baseline salvata
+# 4. se trova differenze mostra una finestra macOS
+#
+# File coinvolti:
+#
+#   ~/maccheck
+#   ~/.mac-security-monitor/baseline/current
+#   ~/Library/LaunchAgents/com.fra.securitycheck.plist
+#
+# ==========================================================
+
+
+# percorso baseline
+BASE="/Users/fra/.mac-security-monitor/baseline/current"
+
+# file temporaneo per confronto
+TMP=$(mktemp)
+
+
+# ----------------------------------------------------------
+# Genera stato corrente del sistema
+# ----------------------------------------------------------
+
+$HOME/.mac-security-monitor/bin/maccheck > "$TMP"
+
+
+# ----------------------------------------------------------
+# Confronto con baseline
+# ----------------------------------------------------------
+# diff -q restituisce exit code diverso da 0 se i file
+# sono diversi.
+# ----------------------------------------------------------
+
+if ! diff -q "$BASE" "$TMP" >/dev/null; then
+
+
+# ----------------------------------------------------------
+# Finestra macOS
+# ----------------------------------------------------------
+# Mostra dialogo con opzioni di gestione.
+# ----------------------------------------------------------
+
+BUTTON=$(osascript <<OSA
+display dialog "Il monitor sicurezza ha rilevato cambiamenti nel sistema." \
+buttons {"?","Mostra dettagli","Aggiorna baseline","Disattiva monitor"} \
+default button "Mostra dettagli"
+return button returned of result
+OSA
+)
+
+
+# ----------------------------------------------------------
+# Pulsante guida
+# ----------------------------------------------------------
+
+if [[ "$BUTTON" == "?" ]]; then
+open -a TextEdit "$HOME/.mac-security-monitor/docs/README.md"
+fi
+
+
+# ----------------------------------------------------------
+# Mostra differenze
+# ----------------------------------------------------------
+
+if [[ "$BUTTON" == "Mostra dettagli" ]]; then
+open -a Terminal "$TMP"
+fi
+
+
+# ----------------------------------------------------------
+# Aggiorna baseline
+# ----------------------------------------------------------
+
+if [[ "$BUTTON" == "Aggiorna baseline" ]]; then
+cp "$TMP" "$BASE"
+osascript -e 'display notification "Baseline di sicurezza aggiornata" with title "Security Monitor"'
+fi
+
+
+# ----------------------------------------------------------
+# Disattiva monitor
+# ----------------------------------------------------------
+
+if [[ "$BUTTON" == "Disattiva monitor" ]]; then
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.fra.securitycheck.plist
+osascript -e 'display notification "Monitor sicurezza disattivato" with title "Security Monitor"'
+fi
+
+fi
+
+
+# ----------------------------------------------------------
+# Pulizia file temporaneo
+# ----------------------------------------------------------
+
+rm "$TMP"
+
