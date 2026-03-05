@@ -47,13 +47,6 @@ log_event() {
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$message" >>"$MONITOR_LOG" 2>/dev/null || true
 }
 
-write_file() {
-  local source_file="$1"
-  local destination_file="$2"
-  local mode="$3"
-  install -m "$mode" "$source_file" "$destination_file"
-}
-
 detect_cli_dir() {
   if [[ -n "$CLI_DIR" ]]; then
     return 0
@@ -135,6 +128,25 @@ configure_auto_update_check() {
   ok "Automatic update check configured: $enabled"
 }
 
+install_source_tree() {
+  rm -rf "$BIN_DIR"
+  mkdir -p "$BIN_DIR"
+  cp -R "$PROJECT_ROOT/src/." "$BIN_DIR/"
+
+  find "$BIN_DIR" -type f \( \
+    -name "*.sh" -o \
+    -name "maccheck" -o \
+    -name "maccheck-alert" -o \
+    -name "security-monitor" -o \
+    -name "securitycheck-status" -o \
+    -name "security-monitor-update" \
+  \) -exec chmod 0755 {} +
+
+  if [[ -f "$BIN_DIR/lib/common.sh" ]]; then
+    chmod 0644 "$BIN_DIR/lib/common.sh"
+  fi
+}
+
 info "Installing Mac Security Monitor..."
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "This installer supports macOS only."
@@ -155,22 +167,16 @@ CLI_UPDATE="$CLI_DIR/security-monitor-update"
 info "CLI directory: $CLI_DIR"
 
 info "Creating runtime directories..."
-mkdir -p "$BIN_DIR" "$DOC_DIR" "$BASELINE_DIR" "$LOG_DIR" "$STATE_DIR" "$LAUNCH_AGENTS_DIR"
+mkdir -p "$DOC_DIR" "$BASELINE_DIR" "$LOG_DIR" "$STATE_DIR" "$LAUNCH_AGENTS_DIR"
 ok "Directories ready."
 
-info "Installing scripts..."
-write_file "$PROJECT_ROOT/src/maccheck" "$BIN_DIR/maccheck" 0755
-write_file "$PROJECT_ROOT/src/maccheck-alert" "$BIN_DIR/maccheck-alert" 0755
-write_file "$PROJECT_ROOT/src/securitycheck-status" "$BIN_DIR/securitycheck-status" 0755
-write_file "$PROJECT_ROOT/src/security-monitor-update" "$BIN_DIR/security-monitor-update" 0755
-write_file "$PROJECT_ROOT/src/reinstall.sh" "$BIN_DIR/reinstall.sh" 0755
-write_file "$PROJECT_ROOT/src/update-check.sh" "$BIN_DIR/update-check.sh" 0755
-write_file "$PROJECT_ROOT/src/update-install.sh" "$BIN_DIR/update-install.sh" 0755
-ok "Scripts installed."
+info "Installing source tree into $BIN_DIR..."
+install_source_tree
+ok "Source tree installed."
 
 info "Installing documentation and version metadata..."
-write_file "$PROJECT_ROOT/docs/README.md" "$DOC_DIR/README.md" 0644
-write_file "$VERSION_SRC" "$VERSION_DST" 0644
+install -m 0644 "$PROJECT_ROOT/docs/README.md" "$DOC_DIR/README.md"
+install -m 0644 "$VERSION_SRC" "$VERSION_DST"
 ok "Documentation and version installed."
 
 configure_auto_update_check
@@ -207,18 +213,18 @@ log_event "LaunchAgent installed and started."
 ok "LaunchAgent installed and loaded."
 
 info "Installing CLI commands..."
-create_symlink "$BIN_DIR/securitycheck-status" "$CLI_STATUS"
+create_symlink "$BIN_DIR/security-monitor" "$CLI_STATUS"
 create_symlink "$BIN_DIR/security-monitor-update" "$CLI_UPDATE"
 ok "CLI commands installed in $CLI_DIR"
 
 info "Verifying installation..."
 [[ -x "$BIN_DIR/maccheck" ]] || fail "maccheck is not executable."
 [[ -x "$BIN_DIR/maccheck-alert" ]] || fail "maccheck-alert is not executable."
-[[ -x "$BIN_DIR/securitycheck-status" ]] || fail "securitycheck-status is not executable."
+[[ -x "$BIN_DIR/security-monitor" ]] || fail "security-monitor is not executable."
 [[ -x "$BIN_DIR/security-monitor-update" ]] || fail "security-monitor-update is not executable."
-[[ -x "$BIN_DIR/reinstall.sh" ]] || fail "reinstall.sh is not executable."
-[[ -x "$BIN_DIR/update-check.sh" ]] || fail "update-check.sh is not executable."
-[[ -x "$BIN_DIR/update-install.sh" ]] || fail "update-install.sh is not executable."
+[[ -x "$BIN_DIR/commands/check-update.sh" ]] || fail "commands/check-update.sh is not executable."
+[[ -x "$BIN_DIR/commands/upgrade.sh" ]] || fail "commands/upgrade.sh is not executable."
+[[ -x "$BIN_DIR/commands/reinstall.sh" ]] || fail "commands/reinstall.sh is not executable."
 [[ -f "$BASELINE_FILE" ]] || fail "Baseline file missing after install."
 [[ -f "$LAUNCH_AGENT_FILE" ]] || fail "LaunchAgent plist missing after install."
 [[ -f "$CONFIG_FILE" ]] || fail "Configuration file missing after install."

@@ -117,7 +117,7 @@ ok "LaunchAgent stopped (if active)."
 
 safe_remove_path "$LAUNCH_AGENT_FILE"
 
-safe_remove_cli_path "$CLI_STATUS" "$BIN_DIR/securitycheck-status"
+safe_remove_cli_path "$CLI_STATUS" "$BIN_DIR/security-monitor"
 safe_remove_cli_path "$CLI_UPDATE" "$BIN_DIR/security-monitor-update"
 
 if [[ -d "$BASE_DIR" ]]; then

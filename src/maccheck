@@ -9,6 +9,9 @@
 set -u
 setopt pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/common.sh"
+
 print_section() {
   local title="$1"
   echo

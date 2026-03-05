@@ -9,19 +9,9 @@
 
 set -euo pipefail
 
-BASE_DIR="${BASE_DIR:-$HOME/.mac-security-monitor}"
-BIN_DIR="$BASE_DIR/bin"
-BASELINE_FILE="$BASE_DIR/baseline/current"
-DOC_FILE="$BASE_DIR/docs/README.md"
-LOG_DIR="$BASE_DIR/logs"
-STATE_DIR="$BASE_DIR/state"
-CONFIG_FILE="$BASE_DIR/config"
-MONITOR_LOG="$LOG_DIR/monitor.log"
-LAST_CHANGE_FILE="$STATE_DIR/last-change"
-LAST_UPDATE_CHECK_FILE="$STATE_DIR/last-update-check"
-LAUNCH_AGENT_LABEL="com.frapo78.securitycheck"
-LAUNCH_AGENT_PLIST="$HOME/Library/LaunchAgents/${LAUNCH_AGENT_LABEL}.plist"
-MSM_LOGGING="${MSM_LOGGING:-1}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/common.sh"
+
 TMP_FILE="$(mktemp -t mac-security-monitor-current.XXXXXX)"
 
 cleanup() {
@@ -29,49 +19,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-log_event() {
-  local message="$1"
-
-  if [[ "$MSM_LOGGING" == "0" ]]; then
-    return 0
-  fi
-
-  mkdir -p "$LOG_DIR" 2>/dev/null || return 0
-  printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$message" >>"$MONITOR_LOG" 2>/dev/null || true
-}
-
 record_last_change() {
-  mkdir -p "$STATE_DIR" 2>/dev/null || return 0
+  safe_mkdir "$STATE_DIR" 2>/dev/null || return 0
   printf '%s\n' "Detected on $(date '+%Y-%m-%d %H:%M:%S')" >"$LAST_CHANGE_FILE" 2>/dev/null || true
 }
 
 notify() {
   local text="$1"
   osascript -e "display notification \"$text\" with title \"Mac Security Monitor\"" >/dev/null 2>&1 || true
-}
-
-auto_update_check_enabled() {
-  if [[ ! -f "$CONFIG_FILE" ]]; then
-    return 1
-  fi
-
-  local value
-  value="$(grep -E '^AUTO_UPDATE_CHECK=' "$CONFIG_FILE" | tail -n 1 | cut -d '=' -f 2 | tr '[:upper:]' '[:lower:]' || true)"
-  [[ "$value" == "true" ]]
-}
-
-should_run_daily_update_check() {
-  mkdir -p "$STATE_DIR" 2>/dev/null || return 1
-
-  if [[ ! -f "$LAST_UPDATE_CHECK_FILE" ]]; then
-    return 0
-  fi
-
-  local now_ts last_ts
-  now_ts="$(date +%s)"
-  last_ts="$(stat -f '%m' "$LAST_UPDATE_CHECK_FILE" 2>/dev/null || echo 0)"
-
-  (( now_ts - last_ts >= 86400 ))
 }
 
 run_update_check_if_enabled() {
@@ -85,13 +40,13 @@ run_update_check_if_enabled() {
 
   touch "$LAST_UPDATE_CHECK_FILE" 2>/dev/null || true
 
-  if [[ ! -x "$BIN_DIR/update-check.sh" ]]; then
-    log_event "WARN: update check requested but update-check.sh is missing."
+  if [[ ! -x "$BIN_DIR/security-monitor" ]]; then
+    log_event "WARN: update check requested but security-monitor is missing."
     return 0
   fi
 
   set +e
-  "$BIN_DIR/update-check.sh" --quiet
+  "$BIN_DIR/security-monitor" check-update --quiet
   local rc=$?
   set -e
 

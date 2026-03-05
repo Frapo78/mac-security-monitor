@@ -1,6 +1,6 @@
 # Mac Security Monitor
 
-![Version](https://img.shields.io/badge/version-1.0.1-blue)
+![Version](https://img.shields.io/badge/version-1.0.2-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20Ventura%20%7C%20Sonoma-black)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/github/actions/workflow/status/Frapo78/mac-security-monitor/ci.yml?label=CI)
@@ -47,13 +47,22 @@ Mac Security Monitor provides a transparent alternative.
 ```text
 mac-security-monitor/
 ├─ src/
+│  ├─ security-monitor          # Main CLI dispatcher
+│  ├─ lib/
+│  │  └─ common.sh              # Shared paths and utility functions
+│  ├─ commands/
+│  │  ├─ status.sh
+│  │  ├─ check-update.sh
+│  │  ├─ upgrade.sh
+│  │  ├─ reinstall.sh
+│  │  ├─ report.sh              # Placeholder
+│  │  └─ audit.sh               # Placeholder
 │  ├─ maccheck
 │  ├─ maccheck-alert
-│  ├─ securitycheck-status
-│  ├─ security-monitor-update
-│  ├─ reinstall.sh
-│  ├─ update-check.sh
-│  └─ update-install.sh
+│  ├─ securitycheck-status      # Compatibility entrypoint
+│  ├─ security-monitor-update   # Compatibility entrypoint
+│  ├─ update-check.sh           # Compatibility entrypoint
+│  └─ update-install.sh         # Compatibility entrypoint
 ├─ installer/
 │  ├─ install.sh
 │  └─ uninstall.sh
@@ -64,6 +73,7 @@ mac-security-monitor/
 │  └─ images/
 │     └─ screenshot-placeholder.svg
 ├─ mac-security-monitor.rb
+├─ ROADMAP.md
 ├─ .github/workflows/ci.yml
 ├─ VERSION
 ├─ LICENSE
@@ -71,6 +81,14 @@ mac-security-monitor/
 ├─ CONTRIBUTING.md
 └─ .gitignore
 ```
+
+## Architecture
+
+The tool uses a shared core library (`src/lib/common.sh`) to keep path handling, logging, and utility logic in one place.
+
+The main CLI (`src/security-monitor`) dispatches subcommands to small modules in `src/commands/`. This keeps each command focused and easy to audit.
+
+The monitoring pipeline remains simple: `maccheck` captures a snapshot, `maccheck-alert` compares it with the baseline, and `launchd` schedules periodic execution.
 
 ## Installation
 
@@ -127,7 +145,11 @@ Reinstall from GitHub (preserves baseline, logs, and config):
 security-monitor reinstall
 ```
 
-Reinstall is useful when your local installation is partial or corrupted. It downloads the latest repository archive, runs the installer again, reloads the LaunchAgent safely, and keeps your user data.
+## Roadmap
+
+Development priorities are tracked in the public roadmap:
+
+[ROADMAP.md](./ROADMAP.md)
 
 ## How Monitoring Works
 
@@ -164,16 +186,6 @@ If baseline is missing:
 ```bash
 ~/.mac-security-monitor/bin/maccheck > ~/.mac-security-monitor/baseline/current
 ```
-
-## Future Roadmap
-
-Possible future features:
-
-- menu bar app
-- real-time file monitoring
-- plugin system
-- pkg installer
-- signed releases
 
 ## Uninstall
 

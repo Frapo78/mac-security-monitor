@@ -4,6 +4,39 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and the project follows Semantic Versioning.
 
+## [1.0.2] - 2026-03-05
+
+Architecture refactor release for **Mac Security Monitor**.
+
+### Added
+
+- Shared core library: `src/lib/common.sh`.
+- New modular CLI dispatcher: `src/security-monitor`.
+- New command modules in `src/commands/`.
+- Placeholder command modules: `commands/report.sh` and `commands/audit.sh`.
+
+### Changed
+
+- Removed duplicated path and utility logic by centralizing shared functions in `common.sh`.
+- Refactored existing command logic into modular scripts.
+- Updated installer to copy the complete `src/*` tree into `~/.mac-security-monitor/bin`.
+- Updated README with internal architecture documentation.
+- Improved CI checks to validate the modular script layout.
+
+### Compatibility
+
+- Existing CLI behavior is preserved.
+- Compatibility entrypoints remain available:
+  - `securitycheck-status`
+  - `security-monitor-update`
+  - `update-check.sh`
+  - `update-install.sh`
+  - `reinstall.sh`
+
+### Author
+
+Francesco Poltero
+
 ## [1.0.1] - 2026-03-05
 
 Maintenance release for the first public stable cycle of **Mac Security Monitor**.

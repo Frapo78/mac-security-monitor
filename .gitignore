@@ -16,3 +16,6 @@
 
 # Local installation artifacts (if created inside repo for testing)
 .mac-security-monitor/
+
+# private maintainer notes
+/docs/dev-notes.md
