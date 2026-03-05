@@ -39,7 +39,9 @@ run_or_note() {
 sorted_list_dir() {
   local dir_path="$1"
   if [[ -d "$dir_path" ]]; then
-    ls -1 "$dir_path" 2>/dev/null | LC_ALL=C sort
+    find "$dir_path" -mindepth 1 -maxdepth 1 -print 2>/dev/null \
+      | sed 's|.*/||' \
+      | LC_ALL=C sort
   else
     echo "Directory not found: $dir_path"
   fi
