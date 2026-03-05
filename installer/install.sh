@@ -20,7 +20,7 @@ VERSION_SRC="$PROJECT_ROOT/VERSION"
 VERSION_DST="$BASE_DIR/VERSION"
 
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-LAUNCH_AGENT_LABEL="com.fra.securitycheck"
+LAUNCH_AGENT_LABEL="com.frapo78.securitycheck"
 LAUNCH_AGENT_FILE="$LAUNCH_AGENTS_DIR/${LAUNCH_AGENT_LABEL}.plist"
 
 CLI_DIR="${CLI_DIR:-/usr/local/bin}"
@@ -112,7 +112,7 @@ cleanup() {
 trap cleanup EXIT
 tmp_plist="$(mktemp -t mac-security-monitor-plist.XXXXXX)"
 
-sed -e "s|__BASE_DIR__|$BASE_DIR|g" "$PROJECT_ROOT/launchd/com.fra.securitycheck.plist" >"$tmp_plist"
+sed -e "s|__BASE_DIR__|$BASE_DIR|g" "$PROJECT_ROOT/launchd/com.frapo78.securitycheck.plist" >"$tmp_plist"
 
 plutil -lint "$tmp_plist" >/dev/null || fail "Generated LaunchAgent plist is invalid."
 cp -f "$tmp_plist" "$LAUNCH_AGENT_FILE"

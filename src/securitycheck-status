@@ -13,7 +13,7 @@ BASELINE_FILE="$BASE_DIR/baseline/current"
 VERSION_FILE="$BASE_DIR/VERSION"
 LOG_FILE="$BASE_DIR/logs/monitor.log"
 LAST_CHANGE_FILE="$BASE_DIR/state/last-change"
-LAUNCH_AGENT_LABEL="com.fra.securitycheck"
+LAUNCH_AGENT_LABEL="com.frapo78.securitycheck"
 LAUNCH_AGENT_PLIST="$HOME/Library/LaunchAgents/${LAUNCH_AGENT_LABEL}.plist"
 
 read_version() {

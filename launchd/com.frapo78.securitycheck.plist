@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.fra.securitycheck</string>
+  <string>com.frapo78.securitycheck</string>
 
   <key>ProgramArguments</key>
   <array>

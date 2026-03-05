@@ -10,7 +10,7 @@ BIN_DIR="$BASE_DIR/bin"
 LOG_DIR="$BASE_DIR/logs"
 MONITOR_LOG="$LOG_DIR/monitor.log"
 
-LAUNCH_AGENT_LABEL="com.fra.securitycheck"
+LAUNCH_AGENT_LABEL="com.frapo78.securitycheck"
 LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/${LAUNCH_AGENT_LABEL}.plist"
 
 CLI_DIR="${CLI_DIR:-/usr/local/bin}"

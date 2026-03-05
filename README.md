@@ -54,7 +54,7 @@ mac-security-monitor/
 │  ├─ install.sh                # Installer (idempotent and safe)
 │  └─ uninstall.sh              # Uninstaller (artifact-scoped)
 ├─ launchd/
-│  └─ com.fra.securitycheck.plist
+│  └─ com.frapo78.securitycheck.plist
 ├─ gui/
 │  └─ installer.applescript
 ├─ docs/
@@ -166,8 +166,8 @@ ls -l /usr/local/bin/security-monitor
 LaunchAgent not loaded:
 
 ```bash
-launchctl list | grep com.fra.securitycheck
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.fra.securitycheck.plist
+launchctl list | grep com.frapo78.securitycheck
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.frapo78.securitycheck.plist
 ```
 
 Missing baseline:

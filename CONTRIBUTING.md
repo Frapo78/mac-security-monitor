@@ -25,7 +25,7 @@ Run:
 ```bash
 zsh -n src/maccheck src/maccheck-alert src/securitycheck-status src/security-monitor-update
 zsh -n installer/install.sh installer/uninstall.sh
-plutil -lint launchd/com.fra.securitycheck.plist
+plutil -lint launchd/com.frapo78.securitycheck.plist
 ```
 
 If available:
