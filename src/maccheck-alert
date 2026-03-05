@@ -1,108 +1,79 @@
 #!/bin/zsh
 
-# ==========================================================
-# MACCHECK ALERT
-# ----------------------------------------------------------
-# Script eseguito automaticamente da launchd ogni ora.
+# Mac Security Monitor
+# Author: Francesco Poltero
 #
-# Funzionamento:
-#
-# 1. esegue maccheck
-# 2. salva l'output temporaneamente
-# 3. confronta con la baseline salvata
-# 4. se trova differenze mostra una finestra macOS
-#
-# File coinvolti:
-#
-#   ~/maccheck
-#   ~/.mac-security-monitor/baseline/current
-#   ~/Library/LaunchAgents/com.fra.securitycheck.plist
-#
-# ==========================================================
+# Runs periodically from launchd, compares current state with baseline,
+# and shows a user dialog when changes are detected.
 
+set -u
 
-# percorso baseline
-BASE="/Users/fra/.mac-security-monitor/baseline/current"
+BASE_DIR="${BASE_DIR:-$HOME/.mac-security-monitor}"
+BIN_DIR="$BASE_DIR/bin"
+BASELINE_FILE="$BASE_DIR/baseline/current"
+DOC_FILE="$BASE_DIR/docs/README.md"
+LAUNCH_AGENT_LABEL="com.fra.securitycheck"
+LAUNCH_AGENT_PLIST="$HOME/Library/LaunchAgents/${LAUNCH_AGENT_LABEL}.plist"
+TMP_FILE="$(mktemp -t mac-security-monitor-current.XXXXXX)"
 
-# file temporaneo per confronto
-TMP=$(mktemp)
+cleanup() {
+  rm -f "$TMP_FILE"
+}
+trap cleanup EXIT
 
+log() {
+  printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
 
-# ----------------------------------------------------------
-# Genera stato corrente del sistema
-# ----------------------------------------------------------
+if [[ ! -x "$BIN_DIR/maccheck" ]]; then
+  log "ERROR: missing executable $BIN_DIR/maccheck"
+  exit 1
+fi
 
-$HOME/.mac-security-monitor/bin/maccheck > "$TMP"
+if [[ ! -f "$BASELINE_FILE" ]]; then
+  log "ERROR: baseline not found at $BASELINE_FILE"
+  exit 1
+fi
 
+if ! "$BIN_DIR/maccheck" >"$TMP_FILE"; then
+  log "ERROR: failed to collect current system state"
+  exit 1
+fi
 
-# ----------------------------------------------------------
-# Confronto con baseline
-# ----------------------------------------------------------
-# diff -q restituisce exit code diverso da 0 se i file
-# sono diversi.
-# ----------------------------------------------------------
+if cmp -s "$BASELINE_FILE" "$TMP_FILE"; then
+  log "No changes detected."
+  exit 0
+fi
 
-if ! diff -q "$BASE" "$TMP" >/dev/null; then
+log "System state changed compared to baseline."
 
-
-# ----------------------------------------------------------
-# Finestra macOS
-# ----------------------------------------------------------
-# Mostra dialogo con opzioni di gestione.
-# ----------------------------------------------------------
-
-BUTTON=$(osascript <<OSA
-display dialog "Il monitor sicurezza ha rilevato cambiamenti nel sistema." \
-buttons {"?","Mostra dettagli","Aggiorna baseline","Disattiva monitor"} \
-default button "Mostra dettagli"
-return button returned of result
+BUTTON="$(osascript <<'OSA'
+try
+  display dialog "Mac Security Monitor detected system changes." buttons {"Help", "Show Details", "Update Baseline", "Disable Monitor"} default button "Show Details" with title "Mac Security Monitor"
+  return button returned of result
+on error
+  return "Dismissed"
+end try
 OSA
-)
+)"
 
-
-# ----------------------------------------------------------
-# Pulsante guida
-# ----------------------------------------------------------
-
-if [[ "$BUTTON" == "?" ]]; then
-open -a TextEdit "$HOME/.mac-security-monitor/docs/README.md"
-fi
-
-
-# ----------------------------------------------------------
-# Mostra differenze
-# ----------------------------------------------------------
-
-if [[ "$BUTTON" == "Mostra dettagli" ]]; then
-open -a Terminal "$TMP"
-fi
-
-
-# ----------------------------------------------------------
-# Aggiorna baseline
-# ----------------------------------------------------------
-
-if [[ "$BUTTON" == "Aggiorna baseline" ]]; then
-cp "$TMP" "$BASE"
-osascript -e 'display notification "Baseline di sicurezza aggiornata" with title "Security Monitor"'
-fi
-
-
-# ----------------------------------------------------------
-# Disattiva monitor
-# ----------------------------------------------------------
-
-if [[ "$BUTTON" == "Disattiva monitor" ]]; then
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.fra.securitycheck.plist
-osascript -e 'display notification "Monitor sicurezza disattivato" with title "Security Monitor"'
-fi
-
-fi
-
-
-# ----------------------------------------------------------
-# Pulizia file temporaneo
-# ----------------------------------------------------------
-
-rm "$TMP"
-
+case "$BUTTON" in
+  "Help")
+    if [[ -f "$DOC_FILE" ]]; then
+      open -a TextEdit "$DOC_FILE" >/dev/null 2>&1 || true
+    fi
+    ;;
+  "Show Details")
+    open -a TextEdit "$TMP_FILE" >/dev/null 2>&1 || true
+    ;;
+  "Update Baseline")
+    cp "$TMP_FILE" "$BASELINE_FILE"
+    osascript -e 'display notification "Baseline updated successfully" with title "Mac Security Monitor"' >/dev/null 2>&1 || true
+    ;;
+  "Disable Monitor")
+    launchctl bootout "gui/$(id -u)" "$LAUNCH_AGENT_PLIST" >/dev/null 2>&1 || true
+    osascript -e 'display notification "Monitoring disabled" with title "Mac Security Monitor"' >/dev/null 2>&1 || true
+    ;;
+  *)
+    ;;
+esac

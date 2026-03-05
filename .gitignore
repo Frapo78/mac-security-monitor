@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Shell and editor backups
+*~
+*.swp
+*.tmp
+
+# Logs and runtime artifacts
+*.log
+
+# Build and package artifacts
+*.tar
+*.tar.gz
+*.zip
+
+# Local installation artifacts (if created inside repo for testing)
+.mac-security-monitor/

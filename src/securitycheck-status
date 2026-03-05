@@ -1,32 +1,63 @@
 #!/bin/zsh
 
-echo "=== Security Monitor Status ==="
+# Mac Security Monitor
+# Author: Francesco Poltero
+#
+# Prints installation and runtime status for quick diagnostics.
+
+set -u
+
+BASE_DIR="${BASE_DIR:-$HOME/.mac-security-monitor}"
+BIN_DIR="$BASE_DIR/bin"
+BASELINE_FILE="$BASE_DIR/baseline/current"
+LAUNCH_AGENT_LABEL="com.fra.securitycheck"
+LAUNCH_AGENT_PLIST="$HOME/Library/LaunchAgents/${LAUNCH_AGENT_LABEL}.plist"
+
+echo "=== Mac Security Monitor Status ==="
 
 echo
-echo "LaunchAgent:"
-launchctl list | grep com.fra.securitycheck || echo "Monitor NON attivo"
+echo "LaunchAgent registration:"
+if launchctl list | grep -q "$LAUNCH_AGENT_LABEL"; then
+  echo "Loaded: yes ($LAUNCH_AGENT_LABEL)"
+else
+  echo "Loaded: no"
+fi
+
+echo
+echo "LaunchAgent file:"
+if [[ -f "$LAUNCH_AGENT_PLIST" ]]; then
+  echo "Present: yes"
+else
+  echo "Present: no"
+fi
 
 echo
 echo "Baseline file:"
-if [[ -f ~/.mac-security-monitor/baseline/current ]]; then
-echo "Baseline presente"
+if [[ -f "$BASELINE_FILE" ]]; then
+  echo "Present: yes"
+  echo "Last modified: $(stat -f '%Sm' "$BASELINE_FILE")"
 else
-echo "Baseline mancante"
+  echo "Present: no"
 fi
 
 echo
-echo "Ultima modifica baseline:"
-stat -f "%Sm" ~/.mac-security-monitor/baseline/current
-
-echo
-echo "Script monitor:"
-if [[ -x ~/.mac-security-monitor/bin/maccheck-alert ]]; then
-echo "maccheck-alert OK"
+echo "Scripts:"
+if [[ -x "$BIN_DIR/maccheck" ]]; then
+  echo "maccheck: executable"
 else
-echo "maccheck-alert non eseguibile"
+  echo "maccheck: missing or not executable"
+fi
+
+if [[ -x "$BIN_DIR/maccheck-alert" ]]; then
+  echo "maccheck-alert: executable"
+else
+  echo "maccheck-alert: missing or not executable"
 fi
 
 echo
-echo "Test maccheck:"
-~/.mac-security-monitor/bin/maccheck | head -n 5
-
+echo "maccheck sample output:"
+if [[ -x "$BIN_DIR/maccheck" ]]; then
+  "$BIN_DIR/maccheck" | head -n 5
+else
+  echo "Unavailable"
+fi
