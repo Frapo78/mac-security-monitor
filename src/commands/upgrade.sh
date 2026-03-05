@@ -144,5 +144,10 @@ launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT_PLIST"
 launchctl enable "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1 || true
 launchctl kickstart -k "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1 || true
 
+if ! "$BIN_DIR/security-monitor" --version >/dev/null 2>&1; then
+  print_error "Post-upgrade verification failed: security-monitor is not runnable."
+  exit 1
+fi
+
 log_event "Upgrade completed successfully to version $new_version."
 echo "Upgrade completed: $new_version"

@@ -38,6 +38,9 @@ Architecture refactor release for **Mac Security Monitor**.
 
 - Fixed CI `Run shellcheck` failures caused by dynamic `source` path detection (SC1091).
 - Documented shared-library exported path variables to avoid false positive SC2034 warnings.
+- Fixed CLI execution through Homebrew symlinks by resolving the real script path in `security-monitor`.
+- Hardened compatibility entrypoints to call `$BASE_DIR/bin/security-monitor` directly.
+- Added post-upgrade runtime verification to detect broken installs immediately.
 
 ### Author
 

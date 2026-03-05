@@ -5,7 +5,5 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# shellcheck source=src/lib/common.sh
-source "$SCRIPT_DIR/lib/common.sh"
-exec "$SCRIPT_DIR/security-monitor" "$@"
+BASE_DIR="${BASE_DIR:-$HOME/.mac-security-monitor}"
+exec "$BASE_DIR/bin/security-monitor" "$@"

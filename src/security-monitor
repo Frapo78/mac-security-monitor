@@ -5,7 +5,27 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+resolve_script_path() {
+  local source_path="$1"
+  local source_dir=""
+  local target=""
+
+  while [[ -L "$source_path" ]]; do
+    source_dir="$(cd "$(dirname "$source_path")" && pwd)"
+    target="$(readlink "$source_path")"
+    if [[ "$target" == /* ]]; then
+      source_path="$target"
+    else
+      source_path="$source_dir/$target"
+    fi
+  done
+
+  echo "$(cd "$(dirname "$source_path")" && pwd)/$(basename "$source_path")"
+}
+
+SCRIPT_PATH="$(resolve_script_path "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+
 # shellcheck source=src/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
