@@ -1,29 +1,29 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented in this file.
 
-The format is based on Keep a Changelog and this project uses Semantic Versioning.
+The format follows Keep a Changelog and the project follows Semantic Versioning.
 
 ## [1.0.0] - 2026-03-05
 
-Initial public release candidate for **Mac Security Monitor**.
+First public release candidate of **Mac Security Monitor**.
 
 ### Added
 
-- MIT `LICENSE`.
-- `.gitignore` for macOS and project artifacts.
-- `CONTRIBUTING.md` with development and contribution guidance.
-- Root `README.md` for GitHub distribution.
+- `VERSION` file with `1.0.0`.
+- New `src/security-monitor-update` script for baseline update workflow.
+- Optional logging under `~/.mac-security-monitor/logs/monitor.log`.
+- GitHub CI workflow at `.github/workflows/ci.yml`.
+- README badges and screenshot placeholder asset.
+- MIT `LICENSE`, `.gitignore`, `CONTRIBUTING.md`, root `README.md`.
 
 ### Changed
 
-- Refactored all shell scripts to English-only comments and messages.
-- Introduced consistent `BASE_DIR` usage across runtime and status scripts.
-- Improved installer portability (works from any current directory).
-- Hardened install/uninstall flows with safer checks and clearer feedback.
-- Updated LaunchAgent template with placeholder-based path injection and log files.
-- Improved optional AppleScript GUI installer to resolve repository-relative paths safely.
-- Expanded documentation for architecture, usage, troubleshooting, and security philosophy.
+- Hardened shell scripts for safer quoting, predictable exit behavior, and defensive checks.
+- Improved installer with command validation, plist validation, reinstall-safe behavior, and better verification.
+- Improved uninstaller safety to remove only recognized project artifacts.
+- Hardened LaunchAgent template with explicit `zsh` invocation, controlled environment variables, and dedicated log files.
+- Added `--version` support to status command (`security-monitor --version`).
 
 ### Author
 

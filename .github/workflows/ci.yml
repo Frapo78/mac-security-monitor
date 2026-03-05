@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Check executable permissions
+        run: |
+          set -euo pipefail
+          scripts=(
+            src/maccheck
+            src/maccheck-alert
+            src/securitycheck-status
+            src/security-monitor-update
+            installer/install.sh
+            installer/uninstall.sh
+          )
+          for script in "${scripts[@]}"; do
+            if [[ ! -x "$script" ]]; then
+              echo "Script is not executable: $script"
+              exit 1
+            fi
+          done
+
+      - name: Validate shell syntax
+        run: |
+          set -euo pipefail
+          zsh -n src/maccheck src/maccheck-alert src/securitycheck-status src/security-monitor-update
+          zsh -n installer/install.sh installer/uninstall.sh
+
+      - name: Validate LaunchAgent plist
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+import plistlib
+with open('launchd/com.fra.securitycheck.plist', 'rb') as f:
+    plistlib.load(f)
+print('LaunchAgent plist is valid XML/plist.')
+PY
+
+      - name: Run shellcheck if available
+        run: |
+          set -euo pipefail
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y shellcheck
+          fi
+          shellcheck -s bash -x \
+            src/maccheck \
+            src/maccheck-alert \
+            src/securitycheck-status \
+            src/security-monitor-update \
+            installer/install.sh \
+            installer/uninstall.sh

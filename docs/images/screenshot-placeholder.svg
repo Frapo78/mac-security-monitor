@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#0f172a"/>
+  <rect x="120" y="120" width="960" height="460" rx="16" fill="#111827" stroke="#334155" stroke-width="2"/>
+  <text x="600" y="300" text-anchor="middle" fill="#e2e8f0" font-family="Menlo, Monaco, monospace" font-size="34">Mac Security Monitor</text>
+  <text x="600" y="350" text-anchor="middle" fill="#94a3b8" font-family="Menlo, Monaco, monospace" font-size="22">Alert Dialog Placeholder</text>
+  <text x="600" y="395" text-anchor="middle" fill="#64748b" font-family="Menlo, Monaco, monospace" font-size="18">Replace with a real screenshot before release if desired.</text>
+</svg>

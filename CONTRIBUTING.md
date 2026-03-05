@@ -1,50 +1,55 @@
 # Contributing to Mac Security Monitor
 
-Thank you for contributing.
-
 Project author and maintainer: **Francesco Poltero**
 
-## Scope
+## Principles
 
-Contributions should improve stability, maintainability, and security visibility without introducing unnecessary complexity.
-
-## Development Principles
-
-- Keep scripts POSIX-friendly where practical and compatible with macOS `zsh`.
-- Use clear English for all documentation, comments, commit messages, and user-facing strings.
-- Avoid hardcoded absolute user paths.
-- Preserve the baseline comparison model unless a change clearly improves security or reliability.
-- Prefer simple and auditable logic over heavy abstractions.
+- Keep the project lightweight, transparent, and easy to audit.
+- Keep all comments, documentation, and messages in English.
+- Prefer deterministic shell logic over complex abstractions.
+- Avoid hardcoded user-specific paths.
+- Keep baseline updates explicit and user-controlled.
 
 ## Repository Conventions
 
-- Runtime scripts live in `src/`.
-- Installer and uninstaller scripts live in `installer/`.
-- LaunchAgent templates live in `launchd/`.
-- User-facing documentation lives in `README.md` and `docs/README.md`.
+- Runtime scripts: `src/`
+- Installer lifecycle: `installer/`
+- LaunchAgent template: `launchd/`
+- Docs: `README.md` and `docs/README.md`
+- CI checks: `.github/workflows/ci.yml`
+
+## Local Validation Before Pull Request
+
+Run:
+
+```bash
+zsh -n src/maccheck src/maccheck-alert src/securitycheck-status src/security-monitor-update
+zsh -n installer/install.sh installer/uninstall.sh
+plutil -lint launchd/com.fra.securitycheck.plist
+```
+
+If available:
+
+```bash
+shellcheck -s bash -x src/maccheck src/maccheck-alert src/securitycheck-status src/security-monitor-update installer/install.sh installer/uninstall.sh
+```
 
 ## Pull Request Checklist
 
-Before opening a pull request:
-
-1. Ensure scripts are executable when needed (`chmod +x`).
-2. Validate installation flow on a clean macOS user profile if possible.
-3. Run and verify:
-   - `./installer/install.sh`
-   - `security-monitor`
-   - `security-monitor-update`
-   - `./installer/uninstall.sh`
-4. Confirm all text is English-only.
-5. Update `CHANGELOG.md` when behavior changes.
+1. Keep scripts executable where required.
+2. Keep behavior idempotent for reinstall and uninstall flows.
+3. Do not remove or change author attribution.
+4. Update `CHANGELOG.md` for user-visible changes.
+5. Confirm README reflects command and installation changes.
 
 ## Security Contributions
 
-For security-sensitive improvements:
+When proposing security changes, include:
 
-- Describe threat scenario and expected impact.
-- Explain how the change affects baseline integrity and false positive risk.
-- Keep user actions explicit (no silent destructive behavior).
+- the threat model or misuse case
+- why the change improves safety or reliability
+- impact on false positives and user workflow
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree to license your contributions under the MIT License.

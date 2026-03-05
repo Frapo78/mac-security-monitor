@@ -7,11 +7,16 @@
 # The output is used for baseline comparison by maccheck-alert.
 
 set -u
+setopt pipefail
 
 print_section() {
   local title="$1"
   echo
   echo "=== ${title} ==="
+}
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
 }
 
 run_or_note() {
@@ -26,29 +31,39 @@ run_or_note() {
 }
 
 echo "=== Non-Apple Launch Agents (user domain) ==="
-run_or_note "Unable to read launchctl list." \
-  sh -c 'launchctl list 2>/dev/null | grep -v "apple" | grep -v "^-" || true'
+if command_exists launchctl; then
+  launchctl list 2>/dev/null | grep -v "apple" | grep -v "^-" || true
+else
+  echo "launchctl command not available."
+fi
 
 print_section "System Launch Daemons"
-run_or_note "Unable to list /Library/LaunchDaemons." \
-  ls -1 /Library/LaunchDaemons 2>/dev/null
+run_or_note "Unable to list /Library/LaunchDaemons." ls -1 /Library/LaunchDaemons 2>/dev/null
 
 print_section "Applications in /Applications"
-run_or_note "Unable to list /Applications." \
-  ls -1 /Applications 2>/dev/null
+run_or_note "Unable to list /Applications." ls -1 /Applications 2>/dev/null
 
 print_section "Listening TCP Ports"
-run_or_note "Unable to inspect listening ports (lsof unavailable or blocked)." \
-  lsof -nP -iTCP -sTCP:LISTEN
+if command_exists lsof; then
+  run_or_note "Unable to inspect listening ports." lsof -nP -iTCP -sTCP:LISTEN
+else
+  echo "lsof command not available."
+fi
 
 print_section "Non-Apple Kernel Extensions"
-run_or_note "Unable to read loaded kernel extensions." \
-  sh -c 'kmutil showloaded 2>/dev/null | grep -v "com.apple" || true'
+if command_exists kmutil; then
+  kmutil showloaded 2>/dev/null | grep -v "com.apple" || true
+else
+  echo "kmutil command not available."
+fi
 
 print_section "Setuid Binaries"
 run_or_note "Unable to scan standard binary directories for setuid files." \
   find /usr/bin /usr/sbin /bin -perm -4000 -type f 2>/dev/null
 
 print_section "Configuration Profiles"
-run_or_note "Unable to read configuration profiles." \
-  profiles show -type configuration 2>/dev/null
+if command_exists profiles; then
+  run_or_note "Unable to read configuration profiles." profiles show -type configuration 2>/dev/null
+else
+  echo "profiles command not available."
+fi

@@ -1,39 +1,68 @@
 # Mac Security Monitor
 
-A lightweight baseline-based security monitoring tool for macOS.
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%20Ventura%20%7C%20Sonoma-black)
+![License](https://img.shields.io/badge/license-MIT-green)
+![CI](https://img.shields.io/github/actions/workflow/status/francescopoltero/mac-security-monitor/ci.yml?label=CI)
 
-Mac Security Monitor captures a security-focused snapshot of your Mac and compares it against a trusted baseline. When changes are detected, it alerts you through a macOS dialog and provides guided response actions.
+A lightweight integrity monitor for macOS that detects unexpected system changes using a baseline comparison approach.
 
-Author: **Francesco Poltero**
-
-Suggested first public release: **v1.0.0**
+Created by **Francesco Poltero**.
 
 ## Features
 
-- Baseline-driven integrity monitoring
-- Scheduled background checks through `launchd`
-- Change detection with interactive GUI alert (AppleScript dialog)
-- CLI status and baseline update commands
-- Local-first design with user-space installation
-- Safe installer and uninstaller scripts
+- Baseline-based integrity monitoring
+- Hourly background monitoring via `launchd`
+- Interactive alert dialog for detected changes
+- Lightweight local logging
+- Status and baseline management CLI commands
+- Script-based architecture with no heavy dependencies
+
+## Security Philosophy
+
+Mac Security Monitor is designed to be:
+
+- simple
+- transparent
+- auditable
+- lightweight
+
+It uses periodic integrity snapshots rather than intrusive system monitoring.
+
+## Problem It Solves
+
+macOS users often have no simple way to detect unexpected system changes.
+
+Existing tools are often:
+
+- complex
+- intrusive
+- difficult to audit
+
+Mac Security Monitor provides a transparent alternative.
 
 ## Architecture Overview
 
 ```text
 mac-security-monitor/
 ├─ src/
-│  ├─ maccheck                 # Collects current system security state
-│  ├─ maccheck-alert           # Compares state with baseline and alerts user
-│  └─ securitycheck-status     # Prints runtime/installation status
+│  ├─ maccheck                  # Collect current system security state
+│  ├─ maccheck-alert            # Compare against baseline and alert user
+│  ├─ securitycheck-status      # CLI status and utility subcommands
+│  └─ security-monitor-update   # Baseline update command
 ├─ installer/
-│  ├─ install.sh               # Installs files, baseline, launch agent, CLI
-│  └─ uninstall.sh             # Stops service and removes installed artifacts
+│  ├─ install.sh                # Installer (idempotent and safe)
+│  └─ uninstall.sh              # Uninstaller (artifact-scoped)
 ├─ launchd/
-│  └─ com.fra.securitycheck.plist  # LaunchAgent template
+│  └─ com.fra.securitycheck.plist
 ├─ gui/
-│  └─ installer.applescript    # Optional GUI installer wrapper
+│  └─ installer.applescript
 ├─ docs/
-│  └─ README.md                # Local copy installed in ~/.mac-security-monitor/docs
+│  ├─ README.md
+│  └─ images/
+│     └─ screenshot-placeholder.svg
+├─ .github/workflows/ci.yml
+├─ VERSION
 ├─ LICENSE
 ├─ CHANGELOG.md
 ├─ CONTRIBUTING.md
@@ -42,140 +71,118 @@ mac-security-monitor/
 
 ## Installation
 
-### Requirements
+Requirements:
 
 - macOS Ventura or newer
 - `zsh`, `launchctl`, `osascript`
-- Write access (or `sudo`) for `/usr/local/bin`
+- write access to `/usr/local/bin` (or `sudo`)
 
-### Install from repository
+Install:
 
 ```bash
 cd /path/to/mac-security-monitor
 ./installer/install.sh
 ```
 
-The installer can be run from any current working directory.
-
-### Optional GUI installer
-
-Run:
+Optional GUI installer:
 
 - `/absolute/path/to/mac-security-monitor/gui/installer.applescript`
 
-## Installed Paths
-
-Default base directory:
-
-- `~/.mac-security-monitor`
-
-Main installed files:
-
-- `~/.mac-security-monitor/bin/maccheck`
-- `~/.mac-security-monitor/bin/maccheck-alert`
-- `~/.mac-security-monitor/bin/securitycheck-status`
-- `~/.mac-security-monitor/baseline/current`
-- `~/Library/LaunchAgents/com.fra.securitycheck.plist`
-
-Installed global commands:
-
-- `security-monitor`
-- `security-monitor-update`
-
 ## CLI Usage
 
-Check monitor status:
+Show monitor status:
 
 ```bash
 security-monitor
 ```
 
-Regenerate baseline and show status:
+Show version:
+
+```bash
+security-monitor --version
+```
+
+Show monitor log:
+
+```bash
+security-monitor log
+```
+
+Show last detected change:
+
+```bash
+security-monitor last-change
+```
+
+Update baseline and print status:
 
 ```bash
 security-monitor-update
 ```
 
-## Monitoring Mechanism
+## How Monitoring Works
 
-1. `maccheck` collects a snapshot of selected security-relevant system data.
-2. The LaunchAgent executes `maccheck-alert` every hour (`StartInterval=3600`) and at login (`RunAtLoad=true`).
-3. `maccheck-alert` compares the new snapshot with baseline `~/.mac-security-monitor/baseline/current`.
-4. If differences are found, a macOS dialog offers:
-   - `Help`
-   - `Show Details`
-   - `Update Baseline`
-   - `Disable Monitor`
+1. `maccheck` generates a current integrity snapshot.
+2. `launchd` runs `maccheck-alert` at load and every hour.
+3. `maccheck-alert` compares current snapshot with baseline.
+4. If changes are detected, the tool records the event and shows an action dialog.
 
-## Security Philosophy
+## Baseline Concept
 
-Mac Security Monitor is designed around simple, inspectable controls:
+The baseline is the trusted reference snapshot saved in:
 
-- Baseline comparison over opaque scoring
-- User visibility and explicit approval for baseline updates
-- Least privilege by default (user-space installation)
-- Plain text artifacts for review and auditing
+- `~/.mac-security-monitor/baseline/current`
 
-This tool does not replace endpoint security software. It provides an additional integrity signal for suspicious or unexpected system drift.
+When legitimate system changes occur (for example software updates), refresh the baseline with:
+
+- `security-monitor-update`
+
+## Logging
+
+Main log file:
+
+- `~/.mac-security-monitor/logs/monitor.log`
+
+Launchd output files:
+
+- `~/.mac-security-monitor/logs/launchd.log`
+- `~/.mac-security-monitor/logs/launchd.err.log`
+
+Disable script logging for one run:
+
+```bash
+MSM_LOGGING=0 ~/.mac-security-monitor/bin/maccheck-alert
+```
 
 ## Troubleshooting
 
-If `security-monitor` is not found:
+Command not found:
 
 ```bash
-echo $PATH
+echo "$PATH"
 ls -l /usr/local/bin/security-monitor
 ```
 
-If LaunchAgent does not appear active:
+LaunchAgent not loaded:
 
 ```bash
 launchctl list | grep com.fra.securitycheck
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.fra.securitycheck.plist
 ```
 
-Check monitor logs:
-
-- `~/Library/Logs/mac-security-monitor.log`
-- `~/Library/Logs/mac-security-monitor.err.log`
-
-If baseline is missing:
+Missing baseline:
 
 ```bash
 ~/.mac-security-monitor/bin/maccheck > ~/.mac-security-monitor/baseline/current
 ```
 
-## Uninstall
+## Uninstall Instructions
 
 ```bash
 cd /path/to/mac-security-monitor
 ./installer/uninstall.sh
 ```
 
-This command:
-
-- stops and unloads the LaunchAgent
-- removes `~/.mac-security-monitor`
-- removes `security-monitor` and `security-monitor-update`
-
-## Compatibility
-
-Target platforms:
-
-- macOS Ventura
-- macOS Sonoma
-- Apple Silicon Macs
-
-The project is shell-based and architecture-neutral for Apple Silicon and Intel Macs where command availability is compatible.
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
-
-## License
-
-MIT License. See [LICENSE](./LICENSE).
-
 ## Author
 
-Francesco Poltero
+Created by **Francesco Poltero**.

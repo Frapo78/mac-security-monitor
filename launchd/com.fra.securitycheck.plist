@@ -7,8 +7,17 @@
 
   <key>ProgramArguments</key>
   <array>
+    <string>/bin/zsh</string>
     <string>__BASE_DIR__/bin/maccheck-alert</string>
   </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>BASE_DIR</key>
+    <string>__BASE_DIR__</string>
+    <key>MSM_LOGGING</key>
+    <string>1</string>
+  </dict>
 
   <key>WorkingDirectory</key>
   <string>__BASE_DIR__</string>
@@ -19,11 +28,14 @@
   <key>StartInterval</key>
   <integer>3600</integer>
 
+  <key>KeepAlive</key>
+  <false/>
+
   <key>StandardOutPath</key>
-  <string>__HOME_DIR__/Library/Logs/mac-security-monitor.log</string>
+  <string>__BASE_DIR__/logs/launchd.log</string>
 
   <key>StandardErrorPath</key>
-  <string>__HOME_DIR__/Library/Logs/mac-security-monitor.err.log</string>
+  <string>__BASE_DIR__/logs/launchd.err.log</string>
 
   <key>ProcessType</key>
   <string>Background</string>
