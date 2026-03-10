@@ -4,6 +4,43 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and the project follows Semantic Versioning.
 
+## [1.0.5] - 2026-03-10
+
+Alert reliability and reporting release for **Mac Security Monitor**.
+
+### Added
+
+- New `security-monitor report` command with:
+  - grouped section-based baseline comparison
+  - severity levels (`high`, `medium`, `low`)
+  - `--summary`, `--full`, and `--gui` output modes
+  - persisted report output under `~/.mac-security-monitor/state/latest-report.txt`
+
+### Changed
+
+- Alert delivery is now stateful:
+  - repeated unchanged detections remain pending instead of spawning duplicated alert attempts
+  - GUI delivery failures are logged explicitly instead of being treated as user dismissals
+- `security-monitor` status now shows whether a pending change alert exists.
+- Public CLI help now includes `security-monitor report`.
+- README and docs were updated for the new command and release version.
+
+### Fixed
+
+- Fixed misleading `Alert dismissed without action.` behavior when AppleScript dialogs could not be displayed from the LaunchAgent context.
+- Prevented repeated alert churn for the same unchanged pending detection set.
+
+### Validation
+
+- Local isolated smoke tests completed for:
+  - report generation
+  - pending alert state creation
+  - repeated-run alert suppression for unchanged detections
+
+### Author
+
+Francesco Poltero
+
 ## [1.0.4] - 2026-03-05
 
 Forensic snapshot hardening release for **Mac Security Monitor**.
@@ -22,6 +59,7 @@ Forensic snapshot hardening release for **Mac Security Monitor**.
   - keep critical alerts active
   - review detailed report
 - New `security-monitor self-test` command for local smoke validation.
+- New `security-monitor report` command for grouped baseline-difference reporting.
 - GitHub compatibility issue template for community validation reports.
 
 ### Changed

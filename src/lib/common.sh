@@ -25,6 +25,7 @@ CRITICAL_REPORT_FILE="$STATE_DIR/critical-issues-last.txt"
 PENDING_CHANGE_ALERT_FILE="$STATE_DIR/pending-change-alert"
 PENDING_CHANGE_SNAPSHOT_FILE="$STATE_DIR/pending-change-snapshot"
 PENDING_CHANGE_GUI_ERROR_FILE="$STATE_DIR/pending-change-gui-error"
+LATEST_REPORT_FILE="$STATE_DIR/latest-report.txt"
 
 LAUNCH_AGENT_LABEL="${MSM_LAUNCH_AGENT_LABEL:-com.frapo78.securitycheck}"
 LAUNCH_AGENT_PLIST="${MSM_LAUNCH_AGENT_PLIST:-$HOME/Library/LaunchAgents/${LAUNCH_AGENT_LABEL}.plist}"
