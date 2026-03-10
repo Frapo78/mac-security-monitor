@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and the project follows Semantic Versioning.
 
+## [1.0.6] - 2026-03-10
+
+Alert-state refinement and report-output polish release for **Mac Security Monitor**.
+
+### Changed
+
+- Acknowledging an alert with `Help` or `Show Details` now clears the pending alert state, so the monitor does not stay stuck in a false pending condition after a real user action.
+- Release metadata was updated to `1.0.6` so OTA update detection can pick up these fixes.
+
+### Fixed
+
+- Fixed pending alert persistence after non-baseline-changing user actions.
+- Fixed full report rendering so one-sided diffs explicitly show `(none)` for empty added or removed blocks.
+
+### Validation
+
+- Local smoke tests confirmed:
+  - pending alert state is cleared after `Show Details`
+  - full report output renders explicit `(none)` for empty diff sides
+
+### Author
+
+Francesco Poltero
+
 ## [1.0.5] - 2026-03-10
 
 Alert reliability and reporting release for **Mac Security Monitor**.

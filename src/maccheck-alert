@@ -239,12 +239,14 @@ rm -f "$PENDING_CHANGE_GUI_ERROR_FILE" 2>/dev/null || true
 
 case "$BUTTON" in
   "Help")
+    clear_pending_change_state
     if [[ -f "$DOC_FILE" ]]; then
       open -a TextEdit "$DOC_FILE" >/dev/null 2>&1 || true
     fi
     log_event "Alert acknowledged with Help action."
     ;;
   "Show Details")
+    clear_pending_change_state
     open -a TextEdit "$TMP_FILE" >/dev/null 2>&1 || true
     log_event "Alert acknowledged with Show Details action."
     ;;

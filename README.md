@@ -1,6 +1,6 @@
 # Mac Security Monitor
 
-![Version](https://img.shields.io/badge/version-1.0.5-blue)
+![Version](https://img.shields.io/badge/version-1.0.6-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20Ventura%20%7C%20Sonoma-black)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/github/actions/workflow/status/Frapo78/mac-security-monitor/ci.yml?label=CI)
@@ -128,7 +128,7 @@ security-monitor self-test
 
 ## Release Validation Status
 
-Version `1.0.5` is published with a controlled release approach to maximize reliability across different macOS setups.
+Version `1.0.6` is published with a controlled release approach to maximize reliability across different macOS setups.
 
 Personally validated in local stress tests:
 
@@ -242,7 +242,7 @@ Development priorities are tracked in the public roadmap:
 
 ## Compatibility Feedback Window
 
-For `v1.0.5`, maintain a 7-10 day compatibility feedback window before declaring the release fully validated across broader macOS environments.
+For `v1.0.6`, maintain a 7-10 day compatibility feedback window before declaring the release fully validated across broader macOS environments.
 
 Use the GitHub compatibility issue template to share test outcomes and edge cases.
 

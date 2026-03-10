@@ -156,6 +156,23 @@ count_diff_lines() {
   awk -v prefix="$prefix" 'index($0, prefix) == 1 {count++} END {print count+0}' "$diff_file" 2>/dev/null | tr -d ' '
 }
 
+print_diff_block() {
+  local prefix="$1"
+  local header_prefix="$2"
+  local diff_file="$3"
+  local lines=""
+
+  lines="$(awk -v prefix="$prefix" -v header_prefix="$header_prefix" '
+    index($0, prefix) == 1 && index($0, header_prefix) != 1 {print substr($0, 2)}
+  ' "$diff_file")"
+
+  if [[ -n "$lines" ]]; then
+    printf '%s\n' "$lines"
+  else
+    echo "(none)"
+  fi
+}
+
 "$BIN_DIR/maccheck" >"$current_snapshot"
 
 baseline_index="$tmp_root/baseline-index.tsv"
@@ -246,14 +263,10 @@ for key in "${section_keys[@]}"; do
     echo "Changes: ${add_count} added, ${remove_count} removed"
     echo
     echo "Added lines:"
-    if ! awk 'index($0, "+") == 1 && index($0, "+++") != 1 {print substr($0, 2)}' "$diff_file" ; then
-      echo "(none)"
-    fi
+    print_diff_block "+" "+++" "$diff_file"
     echo
     echo "Removed lines:"
-    if ! awk 'index($0, "-") == 1 && index($0, "---") != 1 {print substr($0, 2)}' "$diff_file" ; then
-      echo "(none)"
-    fi
+    print_diff_block "-" "---" "$diff_file"
     echo
   } >>"$details_file"
 done
