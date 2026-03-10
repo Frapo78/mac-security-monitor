@@ -31,6 +31,7 @@ CLI_UPDATE=""
 MSM_INSTALL_NONINTERACTIVE="${MSM_INSTALL_NONINTERACTIVE:-0}"
 MSM_AUTO_UPDATE_CHECK="${MSM_AUTO_UPDATE_CHECK:-false}"
 MSM_PRESERVE_BASELINE="${MSM_PRESERVE_BASELINE:-1}"
+MSM_SKIP_LAUNCHD="${MSM_SKIP_LAUNCHD:-0}"
 
 DISASTER_RECOVERY=0
 RECOVERY_ROOT="${MSM_RECOVERY_ROOT:-$HOME/.mac-security-monitor-recovery}"
@@ -144,11 +145,15 @@ configure_auto_update_check() {
 }
 
 install_source_tree() {
-  rm -rf "$BIN_DIR"
-  mkdir -p "$BIN_DIR"
-  cp -R "$PROJECT_ROOT/src/." "$BIN_DIR/"
+  local staging_root="$BASE_DIR/staging"
+  local staged_bin=""
+  local previous_bin=""
 
-  find "$BIN_DIR" -type f \( \
+  mkdir -p "$staging_root"
+  staged_bin="$(mktemp -d "$staging_root/bin.new.XXXXXX")"
+  cp -R "$PROJECT_ROOT/src/." "$staged_bin/"
+
+  find "$staged_bin" -type f \( \
     -name "*.sh" -o \
     -name "maccheck" -o \
     -name "maccheck-alert" -o \
@@ -157,8 +162,28 @@ install_source_tree() {
     -name "security-monitor-update" \
   \) -exec chmod 0755 {} +
 
-  if [[ -f "$BIN_DIR/lib/common.sh" ]]; then
-    chmod 0644 "$BIN_DIR/lib/common.sh"
+  if [[ -f "$staged_bin/lib/common.sh" ]]; then
+    chmod 0644 "$staged_bin/lib/common.sh"
+  fi
+
+  [[ -x "$staged_bin/security-monitor" ]] || fail "Staged source tree is incomplete: security-monitor missing."
+  [[ -x "$staged_bin/maccheck" ]] || fail "Staged source tree is incomplete: maccheck missing."
+
+  previous_bin="$staging_root/bin.previous.$$"
+  rm -rf "$previous_bin"
+
+  if [[ -e "$BIN_DIR" || -L "$BIN_DIR" ]]; then
+    mv "$BIN_DIR" "$previous_bin"
+  fi
+
+  if mv "$staged_bin" "$BIN_DIR"; then
+    rm -rf "$previous_bin"
+  else
+    rm -rf "$staged_bin"
+    if [[ -e "$previous_bin" || -L "$previous_bin" ]]; then
+      mv "$previous_bin" "$BIN_DIR"
+    fi
+    fail "Failed to activate staged source tree."
   fi
 }
 
@@ -312,12 +337,17 @@ plutil -lint "$tmp_plist" >/dev/null || fail "Generated LaunchAgent plist is inv
 cp -f "$tmp_plist" "$LAUNCH_AGENT_FILE"
 rm -f "$tmp_plist"
 
-launchctl bootout "gui/$(id -u)" "$LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
-launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT_FILE"
-launchctl enable "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1 || true
-launchctl kickstart -k "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1 || true
-log_event "LaunchAgent installed and started."
-ok "LaunchAgent installed and loaded."
+if [[ "$MSM_SKIP_LAUNCHD" == "1" ]]; then
+  log_event "LaunchAgent installed without activation."
+  warn "LaunchAgent activation skipped by configuration."
+else
+  launchctl bootout "gui/$(id -u)" "$LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+  launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT_FILE"
+  launchctl enable "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1 || true
+  launchctl kickstart -k "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1 || true
+  log_event "LaunchAgent installed and started."
+  ok "LaunchAgent installed and loaded."
+fi
 
 info "Installing CLI commands..."
 create_symlink "$BIN_DIR/security-monitor" "$CLI_STATUS"
@@ -338,7 +368,9 @@ info "Verifying installation..."
 [[ -f "$LAUNCH_AGENT_FILE" ]] || fail "LaunchAgent plist missing after install."
 [[ -f "$CONFIG_FILE" ]] || fail "Configuration file missing after install."
 
-if launchctl print "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1; then
+if [[ "$MSM_SKIP_LAUNCHD" == "1" ]]; then
+  warn "LaunchAgent activation was skipped; load it later from a user login session if needed."
+elif launchctl print "gui/$(id -u)/$LAUNCH_AGENT_LABEL" >/dev/null 2>&1; then
   ok "LaunchAgent is active."
 else
   warn "LaunchAgent not visible via launchctl print; re-login may be required."

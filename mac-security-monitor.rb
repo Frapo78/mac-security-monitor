@@ -1,8 +1,8 @@
 class MacSecurityMonitor < Formula
   desc "Lightweight integrity monitor for macOS using baseline comparison"
   homepage "https://github.com/Frapo78/mac-security-monitor"
-  url "https://github.com/Frapo78/mac-security-monitor/archive/refs/tags/v1.0.4.tar.gz"
-  sha256 "REPLACE_WITH_RELEASE_ARCHIVE_SHA256"
+  url "https://github.com/Frapo78/mac-security-monitor/archive/850e496.tar.gz"
+  sha256 "870219a15fc0d7126a8ebe99bf1e71ff19e1868da5bb3434021f5d302172fd49"
   license "MIT"
 
   depends_on :macos
@@ -20,6 +20,7 @@ class MacSecurityMonitor < Formula
     ENV["MSM_INSTALL_NONINTERACTIVE"] = "1"
     ENV["MSM_PRESERVE_BASELINE"] = "1"
     ENV["MSM_AUTO_UPDATE_CHECK"] = "false"
+    ENV["MSM_SKIP_LAUNCHD"] = "1"
 
     system "#{libexec}/installer/install.sh"
   end
@@ -34,6 +35,12 @@ class MacSecurityMonitor < Formula
         security-monitor check-update
         security-monitor upgrade
         security-monitor reinstall
+        security-monitor self-test
+
+      Note:
+        LaunchAgent activation is skipped during Homebrew post_install.
+        Open a user login session and run:
+          security-monitor self-test
     EOS
   end
 end

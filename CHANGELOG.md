@@ -35,6 +35,7 @@ Forensic snapshot hardening release for **Mac Security Monitor**.
 - Updated contribution and roadmap documentation for the 1.0.4 architecture and validation process.
 - Added macOS CI validation jobs for `macos-13` and `macos-14`.
 - Updated README with controlled-release compatibility guidance and feedback window.
+- Hardened Homebrew support with a fixed archive checksum and non-interactive installer mode that skips immediate LaunchAgent activation.
 
 ### Validation
 

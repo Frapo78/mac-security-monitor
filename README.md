@@ -116,6 +116,16 @@ brew install mac-security-monitor
 brew install ./mac-security-monitor.rb
 ```
 
+Homebrew note:
+
+- the formula installs the tool and runtime files non-interactively
+- LaunchAgent activation is intentionally skipped during `post_install`
+- after installation, open a normal user session and run:
+
+```bash
+security-monitor self-test
+```
+
 ## Release Validation Status
 
 Version `1.0.4` is published with a controlled release approach to maximize reliability across different macOS setups.
