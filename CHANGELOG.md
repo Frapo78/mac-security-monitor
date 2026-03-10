@@ -36,10 +36,14 @@ Forensic snapshot hardening release for **Mac Security Monitor**.
 - Added macOS CI validation jobs for `macos-13` and `macos-14`.
 - Updated README with controlled-release compatibility guidance and feedback window.
 - Hardened Homebrew support with a fixed archive checksum and non-interactive installer mode that skips immediate LaunchAgent activation.
+- Switched installer source-tree deployment to a staged activation flow with rollback protection.
+- Removed unimplemented placeholder commands from public CLI help output.
+- Added explicit Homebrew post-install guidance to README and formula caveats.
 
 ### Validation
 
 - Local stability stress test completed with 12 consecutive snapshots and zero diff.
+- Syntax and formula validation completed for the Homebrew hardening changes.
 
 ### Author
 

@@ -14,9 +14,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 TMP_FILE="$(mktemp -t mac-security-monitor-current.XXXXXX)"
+ALERT_STDOUT_FILE="$(mktemp -t mac-security-monitor-alert-out.XXXXXX)"
+ALERT_STDERR_FILE="$(mktemp -t mac-security-monitor-alert-err.XXXXXX)"
 
 cleanup() {
   rm -f "$TMP_FILE"
+  rm -f "$ALERT_STDOUT_FILE" "$ALERT_STDERR_FILE"
 }
 trap cleanup EXIT
 
@@ -28,6 +31,49 @@ record_last_change() {
 notify() {
   local text="$1"
   osascript -e "display notification \"$text\" with title \"Mac Security Monitor\"" >/dev/null 2>&1 || true
+}
+
+clear_pending_change_state() {
+  rm -f "$PENDING_CHANGE_ALERT_FILE" "$PENDING_CHANGE_SNAPSHOT_FILE" "$PENDING_CHANGE_GUI_ERROR_FILE" 2>/dev/null || true
+}
+
+mark_pending_change_state() {
+  safe_mkdir "$STATE_DIR" 2>/dev/null || return 0
+  touch "$PENDING_CHANGE_ALERT_FILE" 2>/dev/null || true
+  cp -f "$TMP_FILE" "$PENDING_CHANGE_SNAPSHOT_FILE" 2>/dev/null || true
+}
+
+pending_change_state_matches_current() {
+  [[ -f "$PENDING_CHANGE_SNAPSHOT_FILE" ]] || return 1
+  cmp -s "$PENDING_CHANGE_SNAPSHOT_FILE" "$TMP_FILE"
+}
+
+run_change_alert_dialog() {
+  : >"$ALERT_STDOUT_FILE"
+  : >"$ALERT_STDERR_FILE"
+
+  if ! command -v osascript >/dev/null 2>&1; then
+    printf '%s\n' "osascript command not available." >"$ALERT_STDERR_FILE"
+    return 127
+  fi
+
+  osascript <<'OSA' >"$ALERT_STDOUT_FILE" 2>"$ALERT_STDERR_FILE"
+try
+  display dialog "Mac Security Monitor detected system changes." buttons {"Help", "Show Details", "Update Baseline", "Disable Monitor"} default button "Show Details" with title "Mac Security Monitor"
+  return button returned of result
+on error errMsg number errNum
+  error errMsg number errNum
+end try
+OSA
+  dialog_rc=$?
+
+  return "$dialog_rc"
+}
+
+record_gui_alert_failure() {
+  local message="$1"
+  safe_mkdir "$STATE_DIR" 2>/dev/null || return 0
+  printf '%s\n' "$message" >"$PENDING_CHANGE_GUI_ERROR_FILE" 2>/dev/null || true
 }
 
 prompt_critical_issues_action() {
@@ -152,43 +198,69 @@ if [[ -f "$FIRST_RUN_CHECK_FILE" || -f "$CRITICAL_ALERT_ACTIVE_FILE" ]]; then
 fi
 
 if cmp -s "$BASELINE_FILE" "$TMP_FILE"; then
+  clear_pending_change_state
   log_event "No baseline changes detected."
   exit 0
 fi
 
 record_last_change
-log_event "System changes detected against baseline."
 
-BUTTON="$(osascript <<'OSA'
-try
-  display dialog "Mac Security Monitor detected system changes." buttons {"Help", "Show Details", "Update Baseline", "Disable Monitor"} default button "Show Details" with title "Mac Security Monitor"
-  return button returned of result
-on error
-  return "Dismissed"
-end try
-OSA
-)"
+if [[ -f "$PENDING_CHANGE_ALERT_FILE" ]]; then
+  if pending_change_state_matches_current; then
+    log_event "System changes still pending user action."
+    exit 0
+  fi
+
+  mark_pending_change_state
+  log_event "Pending change alert updated with new system changes."
+else
+  mark_pending_change_state
+  log_event "System changes detected against baseline."
+fi
+
+set +e
+run_change_alert_dialog
+dialog_rc=$?
+set -e
+
+if [[ "$dialog_rc" -ne 0 ]]; then
+  dialog_error="$(tr '\n' ' ' <"$ALERT_STDERR_FILE" | sed 's/[[:space:]]\\+/ /g; s/^ //; s/ $//')"
+  if [[ -z "$dialog_error" ]]; then
+    dialog_error="unknown AppleScript UI error"
+  fi
+  record_gui_alert_failure "$dialog_error"
+  log_event "WARN: GUI alert could not be displayed (exit $dialog_rc): $dialog_error"
+  notify "Security changes detected. Open Mac Security Monitor to review."
+  exit 0
+fi
+
+BUTTON="$(tr -d '\r' <"$ALERT_STDOUT_FILE" | sed -n '1p')"
+rm -f "$PENDING_CHANGE_GUI_ERROR_FILE" 2>/dev/null || true
 
 case "$BUTTON" in
   "Help")
     if [[ -f "$DOC_FILE" ]]; then
       open -a TextEdit "$DOC_FILE" >/dev/null 2>&1 || true
     fi
+    log_event "Alert acknowledged with Help action."
     ;;
   "Show Details")
     open -a TextEdit "$TMP_FILE" >/dev/null 2>&1 || true
+    log_event "Alert acknowledged with Show Details action."
     ;;
   "Update Baseline")
     cp -f "$TMP_FILE" "$BASELINE_FILE"
+    clear_pending_change_state
     log_event "Baseline updated from alert dialog."
     notify "Baseline updated successfully"
     ;;
   "Disable Monitor")
+    clear_pending_change_state
     launchctl bootout "gui/$(id -u)" "$LAUNCH_AGENT_PLIST" >/dev/null 2>&1 || true
     log_event "Monitoring disabled by user action."
     notify "Monitoring disabled"
     ;;
   *)
-    log_event "Alert dismissed without action."
+    log_event "WARN: GUI alert returned an unexpected result: ${BUTTON:-empty}"
     ;;
 esac

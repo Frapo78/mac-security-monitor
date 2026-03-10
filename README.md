@@ -48,7 +48,7 @@ In short: the tool tracks persistence points, startup behavior, network exposure
 
 - Baseline-based integrity monitoring
 - Hourly background monitoring through `launchd`
-- Interactive GUI alerts for detected changes
+- Interactive GUI alerts for detected changes with pending-alert tracking
 - Lightweight local logging
 - Status, baseline management, and update CLI commands
 - Optional OTA update checks and user-confirmed upgrades
@@ -242,6 +242,13 @@ Use the GitHub compatibility issue template to share test outcomes and edge case
 - Main log: `~/.mac-security-monitor/logs/monitor.log`
 - LaunchAgent stdout: `~/.mac-security-monitor/logs/launchd.log`
 - LaunchAgent stderr: `~/.mac-security-monitor/logs/launchd.err.log`
+
+## Alert Behavior
+
+- Change alerts now use a persistent pending state.
+- If the GUI dialog cannot be displayed, the alert remains pending instead of being logged as a user dismissal.
+- The monitor does not duplicate the same pending alert on every hourly run.
+- A new alert attempt is made only when the detected change set actually changes.
 
 ## Snapshot Stability
 

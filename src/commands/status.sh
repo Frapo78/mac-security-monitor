@@ -46,6 +46,15 @@ else
 fi
 
 echo
+echo "Pending change alert:"
+if [[ -f "$PENDING_CHANGE_ALERT_FILE" ]]; then
+  echo "Present: yes"
+  echo "Last updated: $(stat -f '%Sm' "$PENDING_CHANGE_ALERT_FILE")"
+else
+  echo "Present: no"
+fi
+
+echo
 echo "Scripts:"
 for script in maccheck maccheck-alert security-monitor security-monitor-update reinstall.sh update-check.sh update-install.sh commands/self-test.sh; do
   if [[ -x "$BIN_DIR/$script" ]]; then
