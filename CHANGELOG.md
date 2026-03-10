@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and the project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+
+- Reduced persistence-noise in baseline comparisons by filtering Apple launchd entries and common trusted vendor components from startup-focused sections.
+- Normalized dynamic `application.*` launchctl labels before snapshot comparison so transient runtime instances do not look like new persistence.
+- Tightened `security-monitor report` severity logic so only newly added non-Apple, non-whitelisted persistence entries are treated as high severity.
+- Tightened LaunchAgent status validation so isolated or temporary installs do not incorrectly report another installation's loaded job as their own.
+
+### Validation
+
+- Persistence-focused normalization was applied both at snapshot time and during report comparison, so older noisy baselines do not produce large false-positive removal reports.
+- Stress tests confirmed deterministic snapshot hashes across repeated runs and corrected LaunchAgent status reporting for custom `BASE_DIR` installs.
+
+### Fixed
+
+- Filtered the `launchctl` table header so `Label` is not captured as a fake persistence entry.
+- Fixed false-green LaunchAgent checks in `security-monitor` and `security-monitor self-test` when a different installation with the same label is already loaded on the system.
+
 ## [1.0.6] - 2026-03-10
 
 Alert-state refinement and report-output polish release for **Mac Security Monitor**.

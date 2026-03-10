@@ -47,6 +47,22 @@ sorted_list_dir() {
   fi
 }
 
+print_filtered_persistence_dir() {
+  local dir_path="$1"
+  local entry=""
+
+  if [[ ! -d "$dir_path" ]]; then
+    echo "Directory not found: $dir_path"
+    return
+  fi
+
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    is_known_safe_persistence_entry "$entry" && continue
+    echo "$entry"
+  done < <(sorted_list_dir "$dir_path")
+}
+
 print_file_hash() {
   local file_path="$1"
   if command_exists shasum; then
@@ -99,13 +115,24 @@ inspect_launchd_plists() {
     fi
 
     local exec_path="$program"
+    local normalized_label=""
     if [[ -z "$exec_path" ]]; then
       exec_path="$program_args0"
     fi
 
+    if [[ -n "$label" ]]; then
+      normalized_label="$(normalize_launchctl_label "$label")"
+    fi
+
+    if is_known_safe_persistence_entry "$plist_path" \
+      || is_known_safe_persistence_entry "${normalized_label:-$label}" \
+      || is_known_safe_persistence_entry "$exec_path"; then
+      continue
+    fi
+
     echo "File: $plist_path"
     echo "  SHA256: $(print_file_hash "$plist_path")"
-    echo "  Label: ${label:-unavailable}"
+    echo "  Label: ${normalized_label:-${label:-unavailable}}"
     echo "  Executable: ${exec_path:-unavailable}"
 
     if [[ -n "$exec_path" ]]; then
@@ -125,11 +152,12 @@ print_non_apple_launchctl_labels() {
   # Keep only labels to avoid PID/status volatility.
   launchctl list 2>/dev/null \
     | awk '{print $3}' \
-    | sed -E 's/(\.[0-9]+)+$//' \
-    | grep -v '^$' \
-    | grep -v '^application\.com\.apple\.' \
-    | grep -v '^com\.apple\.' \
-    | grep -v '^-' \
+    | while IFS= read -r label; do
+        [[ -n "$label" && "$label" != "-" && "$label" != "Label" ]] || continue
+        label="$(normalize_launchctl_label "$label")"
+        is_known_safe_persistence_entry "$label" && continue
+        echo "$label"
+      done \
     | LC_ALL=C sort -u
 }
 
@@ -170,13 +198,13 @@ print_section "Non-Apple Launchctl Labels (user domain)"
 print_non_apple_launchctl_labels
 
 print_section "LaunchAgents in User Library"
-sorted_list_dir "$HOME/Library/LaunchAgents"
+print_filtered_persistence_dir "$HOME/Library/LaunchAgents"
 
 print_section "LaunchAgents in System Library"
-sorted_list_dir "/Library/LaunchAgents"
+print_filtered_persistence_dir "/Library/LaunchAgents"
 
 print_section "LaunchDaemons in System Library"
-sorted_list_dir "/Library/LaunchDaemons"
+print_filtered_persistence_dir "/Library/LaunchDaemons"
 
 print_section "LaunchAgent/LaunchDaemon Forensic Metadata"
 inspect_launchd_plists "$HOME/Library/LaunchAgents"

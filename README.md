@@ -34,6 +34,8 @@ Optional deep checks (only when `MSM_DEEP_NETWORK=1`):
 1. Established TCP connections.
 2. DNS/network configuration summary.
 
+To reduce noise, the monitor automatically ignores Apple persistence entries, normalizes dynamic `application.*` runtime labels, and suppresses common trusted vendor startup components such as Google, OpenAI, Anthropic, Homebrew, Adobe, Epson, and IDrive.
+
 In short: the tool tracks persistence points, startup behavior, network exposure, and core platform protections, then compares them with your trusted baseline to detect changes.
 
 ## Why It Is Useful
@@ -43,6 +45,7 @@ In short: the tool tracks persistence points, startup behavior, network exposure
 - It alerts you when sensitive security points change, such as startup services, scheduled tasks, login items, and listening network ports.
 - It can reveal suspicious situations early, for example a hidden script opening a network port and exposing your Mac to remote intrusion.
 - It gives you a clear before/after baseline comparison, so you can investigate unexpected changes before they become a bigger security problem.
+- It reduces false positives by filtering known-safe Apple and common vendor persistence entries, so new suspicious startup items stand out more clearly.
 
 ## Features
 

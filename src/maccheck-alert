@@ -14,11 +14,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 TMP_FILE="$(mktemp -t mac-security-monitor-current.XXXXXX)"
+NORMALIZED_TMP_FILE="$(mktemp -t mac-security-monitor-current-normalized.XXXXXX)"
+NORMALIZED_BASELINE_FILE="$(mktemp -t mac-security-monitor-baseline-normalized.XXXXXX)"
 ALERT_STDOUT_FILE="$(mktemp -t mac-security-monitor-alert-out.XXXXXX)"
 ALERT_STDERR_FILE="$(mktemp -t mac-security-monitor-alert-err.XXXXXX)"
 
 cleanup() {
   rm -f "$TMP_FILE"
+  rm -f "$NORMALIZED_TMP_FILE" "$NORMALIZED_BASELINE_FILE"
   rm -f "$ALERT_STDOUT_FILE" "$ALERT_STDERR_FILE"
 }
 trap cleanup EXIT
@@ -40,12 +43,157 @@ clear_pending_change_state() {
 mark_pending_change_state() {
   safe_mkdir "$STATE_DIR" 2>/dev/null || return 0
   touch "$PENDING_CHANGE_ALERT_FILE" 2>/dev/null || true
-  cp -f "$TMP_FILE" "$PENDING_CHANGE_SNAPSHOT_FILE" 2>/dev/null || true
+  cp -f "$NORMALIZED_TMP_FILE" "$PENDING_CHANGE_SNAPSHOT_FILE" 2>/dev/null || true
 }
 
 pending_change_state_matches_current() {
   [[ -f "$PENDING_CHANGE_SNAPSHOT_FILE" ]] || return 1
-  cmp -s "$PENDING_CHANGE_SNAPSHOT_FILE" "$TMP_FILE"
+  cmp -s "$PENDING_CHANGE_SNAPSHOT_FILE" "$NORMALIZED_TMP_FILE"
+}
+
+is_persistence_section() {
+  case "$1" in
+    "Non-Apple Launchctl Labels (user domain)"|"LaunchAgents in User Library"|"LaunchAgents in System Library"|"LaunchDaemons in System Library"|"LaunchAgent/LaunchDaemon Forensic Metadata")
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+flush_filtered_forensic_record() {
+  local output_file="$1"
+  local file_path="$2"
+  local label="$3"
+  local exec_path="$4"
+  shift 4
+
+  local normalized_label="$label"
+  if [[ -n "$normalized_label" && "$normalized_label" != "unavailable" ]]; then
+    normalized_label="$(normalize_launchctl_label "$normalized_label")"
+  fi
+
+  if is_known_safe_persistence_entry "$file_path" \
+    || is_known_safe_persistence_entry "${normalized_label:-$label}" \
+    || is_known_safe_persistence_entry "$exec_path"; then
+    return
+  fi
+
+  local line=""
+  for line in "$@"; do
+    if [[ "$line" == "  Label: "* && -n "$normalized_label" ]]; then
+      printf '  Label: %s\n' "$normalized_label" >>"$output_file"
+    else
+      printf '%s\n' "$line" >>"$output_file"
+    fi
+  done
+}
+
+normalize_persistence_section() {
+  local title="$1"
+  local input_file="$2"
+  local output_file="$3"
+  local line=""
+  local normalized_line=""
+
+  : >"$output_file"
+
+  if [[ "$title" == "LaunchAgent/LaunchDaemon Forensic Metadata" ]]; then
+    local current_file=""
+    local current_label=""
+    local current_exec=""
+    typeset -a record_lines
+    record_lines=()
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" == "File: "* ]]; then
+        if (( ${#record_lines[@]} > 0 )); then
+          flush_filtered_forensic_record "$output_file" "$current_file" "$current_label" "$current_exec" "${record_lines[@]}"
+        fi
+        record_lines=("$line")
+        current_file="${line#File: }"
+        current_label=""
+        current_exec=""
+        continue
+      fi
+
+      (( ${#record_lines[@]} > 0 )) || continue
+      record_lines+=("$line")
+
+      case "$line" in
+        "  Label: "*) current_label="${line#  Label: }" ;;
+        "  Executable: "*) current_exec="${line#  Executable: }" ;;
+      esac
+    done <"$input_file"
+
+    if (( ${#record_lines[@]} > 0 )); then
+      flush_filtered_forensic_record "$output_file" "$current_file" "$current_label" "$current_exec" "${record_lines[@]}"
+    fi
+
+    return
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] || continue
+
+    if [[ "$line" == Directory\ not\ found:* || "$line" == *command\ not\ available.* ]]; then
+      printf '%s\n' "$line" >>"$output_file"
+      continue
+    fi
+
+    normalized_line="$line"
+    if [[ "$title" == "Non-Apple Launchctl Labels (user domain)" ]]; then
+      normalized_line="$(normalize_launchctl_label "$line")"
+    fi
+
+    is_known_safe_persistence_entry "$normalized_line" && continue
+    printf '%s\n' "$normalized_line" >>"$output_file"
+  done <"$input_file"
+
+  LC_ALL=C sort -u "$output_file" -o "$output_file"
+}
+
+normalize_snapshot_for_compare() {
+  local input_file="$1"
+  local output_file="$2"
+  local current_title=""
+  local section_tmp=""
+  local line=""
+
+  : >"$output_file"
+
+  section_tmp="$(mktemp -t mac-security-monitor-section.XXXXXX)"
+
+  flush_section() {
+    [[ -n "$current_title" ]] || return 0
+    printf '=== %s ===\n' "$current_title" >>"$output_file"
+    if is_persistence_section "$current_title"; then
+      normalize_persistence_section "$current_title" "$section_tmp" "$section_tmp.normalized"
+      cat "$section_tmp.normalized" >>"$output_file"
+      rm -f "$section_tmp.normalized"
+    else
+      cat "$section_tmp" >>"$output_file"
+    fi
+    printf '\n' >>"$output_file"
+    : >"$section_tmp"
+  }
+
+  : >"$section_tmp"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == "=== "* && "$line" == *" ===" ]]; then
+      flush_section
+      current_title="${line#=== }"
+      current_title="${current_title% ===}"
+      continue
+    fi
+
+    if [[ -n "$current_title" ]]; then
+      printf '%s\n' "$line" >>"$section_tmp"
+    fi
+  done <"$input_file"
+
+  flush_section
+  rm -f "$section_tmp"
 }
 
 run_change_alert_dialog() {
@@ -179,6 +327,9 @@ if ! "$BIN_DIR/maccheck" >"$TMP_FILE"; then
   exit 1
 fi
 
+normalize_snapshot_for_compare "$BASELINE_FILE" "$NORMALIZED_BASELINE_FILE"
+normalize_snapshot_for_compare "$TMP_FILE" "$NORMALIZED_TMP_FILE"
+
 log_event "Monitor execution completed."
 run_update_check_if_enabled
 
@@ -197,7 +348,7 @@ if [[ -f "$FIRST_RUN_CHECK_FILE" || -f "$CRITICAL_ALERT_ACTIVE_FILE" ]]; then
   fi
 fi
 
-if cmp -s "$BASELINE_FILE" "$TMP_FILE"; then
+if cmp -s "$NORMALIZED_BASELINE_FILE" "$NORMALIZED_TMP_FILE"; then
   clear_pending_change_state
   log_event "No baseline changes detected."
   exit 0

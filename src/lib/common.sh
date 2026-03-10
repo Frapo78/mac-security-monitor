@@ -35,6 +35,52 @@ REPO_ARCHIVE_URL="${MSM_REPO_ARCHIVE_URL:-https://codeload.github.com/Frapo78/ma
 CURL_MAX_TIME="${MSM_CURL_MAX_TIME:-30}"
 MSM_LOGGING="${MSM_LOGGING:-1}"
 
+to_lower() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+normalize_launchctl_label() {
+  local label="$1"
+  printf '%s\n' "$label" | sed -E 's/(\.[0-9]+)+$//'
+}
+
+is_apple_persistence_entry() {
+  local value_lc
+  value_lc="$(to_lower "$1")"
+
+  [[ "$value_lc" == com.apple.* ]] && return 0
+  [[ "$value_lc" == application.com.apple.* ]] && return 0
+  [[ "$value_lc" == *"/system/library/"* ]] && return 0
+  [[ "$value_lc" == *"/library/apple/"* ]] && return 0
+
+  return 1
+}
+
+is_whitelisted_vendor_entry() {
+  local value_lc
+  value_lc="$(to_lower "$1")"
+
+  case "$value_lc" in
+    *google*|*chrome*|*keystone*|*drivefs*|*openai*|*chatgpt*|*anthropic*|*claude*|*homebrew*|*org.homebrew*|*homebrew.mxcl*|*adobe*|*epson*|*idrive*)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+is_known_safe_persistence_entry() {
+  local value="$1"
+  local normalized_value
+
+  normalized_value="$(normalize_launchctl_label "$value")"
+
+  is_apple_persistence_entry "$normalized_value" && return 0
+  is_whitelisted_vendor_entry "$normalized_value" && return 0
+
+  return 1
+}
+
 print_info() { echo "[INFO] $*"; }
 print_ok() { echo "[OK]   $*"; }
 print_warn() { echo "[WARN] $*"; }
@@ -126,6 +172,28 @@ launchagent_loaded() {
   fi
 
   launchctl list | grep -q "$LAUNCH_AGENT_LABEL"
+}
+
+launchagent_targets_current_install() {
+  [[ -f "$LAUNCH_AGENT_PLIST" ]] || return 1
+
+  local configured_base_dir=""
+  local configured_program=""
+
+  if [[ -x /usr/libexec/PlistBuddy ]]; then
+    configured_base_dir="$(/usr/libexec/PlistBuddy -c 'Print :EnvironmentVariables:BASE_DIR' "$LAUNCH_AGENT_PLIST" 2>/dev/null || true)"
+    configured_program="$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments:1' "$LAUNCH_AGENT_PLIST" 2>/dev/null || true)"
+  fi
+
+  [[ "$configured_base_dir" == "$BASE_DIR" ]] && return 0
+  [[ "$configured_program" == "$BIN_DIR/maccheck-alert" ]] && return 0
+
+  return 1
+}
+
+launchagent_loaded_for_current_install() {
+  launchagent_targets_current_install || return 1
+  launchagent_loaded
 }
 
 auto_update_check_enabled() {

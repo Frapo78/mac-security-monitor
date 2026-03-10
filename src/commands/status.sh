@@ -14,8 +14,10 @@ echo "Version: $(normalize_version "$(read_local_version)")"
 
 echo
 echo "LaunchAgent registration:"
-if launchagent_loaded; then
+if launchagent_loaded_for_current_install; then
   echo "Loaded: yes ($LAUNCH_AGENT_LABEL)"
+elif launchagent_loaded; then
+  echo "Loaded: no (a different installation with the same label appears active)"
 else
   echo "Loaded: no"
 fi

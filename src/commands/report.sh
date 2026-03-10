@@ -123,6 +123,136 @@ severity_for_section() {
   esac
 }
 
+is_persistence_section() {
+  case "$1" in
+    "Non-Apple Launchctl Labels (user domain)"|"LaunchAgents in User Library"|"LaunchAgents in System Library"|"LaunchDaemons in System Library"|"LaunchAgent/LaunchDaemon Forensic Metadata")
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+flush_filtered_forensic_record() {
+  local output_file="$1"
+  local file_path="$2"
+  local label="$3"
+  local exec_path="$4"
+  shift 4
+
+  local normalized_label="$label"
+  if [[ -n "$normalized_label" && "$normalized_label" != "unavailable" ]]; then
+    normalized_label="$(normalize_launchctl_label "$normalized_label")"
+  fi
+
+  if is_known_safe_persistence_entry "$file_path" \
+    || is_known_safe_persistence_entry "${normalized_label:-$label}" \
+    || is_known_safe_persistence_entry "$exec_path"; then
+    return
+  fi
+
+  local line=""
+  for line in "$@"; do
+    if [[ "$line" == "  Label: "* && -n "$normalized_label" ]]; then
+      printf '  Label: %s\n' "$normalized_label" >>"$output_file"
+    else
+      printf '%s\n' "$line" >>"$output_file"
+    fi
+  done
+}
+
+normalize_persistence_section() {
+  local title="$1"
+  local input_file="$2"
+  local output_file="$3"
+
+  : >"$output_file"
+
+  if [[ "$title" == "LaunchAgent/LaunchDaemon Forensic Metadata" ]]; then
+    local line=""
+    local current_file=""
+    local current_label=""
+    local current_exec=""
+    typeset -a record_lines
+    record_lines=()
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" == "File: "* ]]; then
+        if (( ${#record_lines[@]} > 0 )); then
+          flush_filtered_forensic_record "$output_file" "$current_file" "$current_label" "$current_exec" "${record_lines[@]}"
+        fi
+        record_lines=("$line")
+        current_file="${line#File: }"
+        current_label=""
+        current_exec=""
+        continue
+      fi
+
+      (( ${#record_lines[@]} > 0 )) || continue
+      record_lines+=("$line")
+
+      case "$line" in
+        "  Label: "*) current_label="${line#  Label: }" ;;
+        "  Executable: "*) current_exec="${line#  Executable: }" ;;
+      esac
+    done <"$input_file"
+
+    if (( ${#record_lines[@]} > 0 )); then
+      flush_filtered_forensic_record "$output_file" "$current_file" "$current_label" "$current_exec" "${record_lines[@]}"
+    fi
+
+    return
+  fi
+
+  local normalized_line=""
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] || continue
+
+    if [[ "$line" == Directory\ not\ found:* || "$line" == *command\ not\ available.* ]]; then
+      printf '%s\n' "$line" >>"$output_file"
+      continue
+    fi
+
+    normalized_line="$line"
+    if [[ "$title" == "Non-Apple Launchctl Labels (user domain)" ]]; then
+      normalized_line="$(normalize_launchctl_label "$line")"
+    fi
+
+    is_known_safe_persistence_entry "$normalized_line" && continue
+    printf '%s\n' "$normalized_line" >>"$output_file"
+  done <"$input_file"
+
+  LC_ALL=C sort -u "$output_file" -o "$output_file"
+}
+
+prepare_comparable_section() {
+  local title="$1"
+  local input_file="$2"
+  local output_file="$3"
+
+  if is_persistence_section "$title"; then
+    normalize_persistence_section "$title" "$input_file" "$output_file"
+  else
+    cp "$input_file" "$output_file"
+  fi
+}
+
+severity_for_change() {
+  local title="$1"
+  local add_count="$2"
+
+  if is_persistence_section "$title"; then
+    if (( add_count > 0 )); then
+      echo "high"
+    else
+      echo "medium"
+    fi
+    return
+  fi
+
+  severity_for_section "$title"
+}
+
 split_snapshot() {
   local source_file="$1"
   local out_dir="$2"
@@ -225,15 +355,20 @@ for key in "${section_keys[@]}"; do
   title="${current_titles[$key]:-${baseline_titles[$key]:-$key}}"
   baseline_section="$baseline_dir/$key"
   current_section="$current_dir/$key"
+  normalized_baseline_section="$tmp_root/$key.baseline.normalized"
+  normalized_current_section="$tmp_root/$key.current.normalized"
   [[ -f "$baseline_section" ]] || : >"$baseline_section"
   [[ -f "$current_section" ]] || : >"$current_section"
 
-  if cmp -s "$baseline_section" "$current_section"; then
+  prepare_comparable_section "$title" "$baseline_section" "$normalized_baseline_section"
+  prepare_comparable_section "$title" "$current_section" "$normalized_current_section"
+
+  if cmp -s "$normalized_baseline_section" "$normalized_current_section"; then
     continue
   fi
 
   diff_file="$tmp_root/$key.diff"
-  diff -u "$baseline_section" "$current_section" >"$diff_file" || true
+  diff -u "$normalized_baseline_section" "$normalized_current_section" >"$diff_file" || true
 
   add_count="$(count_diff_lines '+' "$diff_file")"
   remove_count="$(count_diff_lines '-' "$diff_file")"
@@ -245,7 +380,7 @@ for key in "${section_keys[@]}"; do
   fi
 
   category="$(category_for_section "$title")"
-  severity="$(severity_for_section "$title")"
+  severity="$(severity_for_change "$title" "$add_count")"
   category_seen[$category]=1
   severity_counts[$severity]=$(( ${severity_counts[$severity]:-0} + 1 ))
 

@@ -82,8 +82,10 @@ else
   fail_msg "LaunchAgent plist not found: $LAUNCH_AGENT_PLIST"
 fi
 
-if launchagent_loaded; then
+if launchagent_loaded_for_current_install; then
   ok_msg "LaunchAgent appears loaded."
+elif launchagent_loaded; then
+  warn_msg "LaunchAgent label is active, but the loaded job does not appear to target this BASE_DIR."
 else
   warn_msg "LaunchAgent is not currently loaded."
 fi
