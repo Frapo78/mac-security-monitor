@@ -12,6 +12,7 @@ source "$SCRIPT_DIR/../lib/common.sh"
 SUMMARY_ONLY=0
 FULL_OUTPUT=0
 GUI_OUTPUT=0
+REPORT_INCLUDE_TIMESTAMP="${MSM_REPORT_INCLUDE_TIMESTAMP:-1}"
 
 usage() {
   cat <<'USAGE'
@@ -201,6 +202,9 @@ normalize_persistence_section() {
       flush_filtered_forensic_record "$output_file" "$current_file" "$current_label" "$current_exec" "${record_lines[@]}"
     fi
 
+    awk 'NF > 0 {print}' "$output_file" >"$output_file.cleaned"
+    mv "$output_file.cleaned" "$output_file"
+
     return
   fi
 
@@ -218,6 +222,7 @@ normalize_persistence_section() {
       normalized_line="$(normalize_launchctl_label "$line")"
     fi
 
+    [[ -n "$normalized_line" ]] || continue
     is_known_safe_persistence_entry "$normalized_line" && continue
     printf '%s\n' "$normalized_line" >>"$output_file"
   done <"$input_file"
@@ -303,6 +308,168 @@ print_diff_block() {
   fi
 }
 
+parse_forensic_records() {
+  local input_file="$1"
+  local output_file="$2"
+
+  awk '
+    function emit_record() {
+      if (file_path != "") {
+        print file_path "\t" sha256 "\t" label "\t" executable "\t" signature
+      }
+      file_path = ""
+      sha256 = ""
+      label = ""
+      executable = ""
+      signature = ""
+    }
+    /^File: / {
+      emit_record()
+      file_path = substr($0, 7)
+      next
+    }
+    /^  SHA256: / { sha256 = substr($0, 11); next }
+    /^  Label: / { label = substr($0, 10); next }
+    /^  Executable: / { executable = substr($0, 15); next }
+    /^  Signature: / { signature = substr($0, 14); next }
+    END { emit_record() }
+  ' "$input_file" >"$output_file"
+}
+
+build_forensic_metadata_detail() {
+  local baseline_section="$1"
+  local current_section="$2"
+  local detail_output_file="$3"
+  local summary_output_file="$4"
+
+  local baseline_records="$tmp_root/forensic-baseline.tsv"
+  local current_records="$tmp_root/forensic-current.tsv"
+  local record_keys_file="$tmp_root/forensic-record-keys.txt"
+
+  parse_forensic_records "$baseline_section" "$baseline_records"
+  parse_forensic_records "$current_section" "$current_records"
+
+  {
+    awk -F $'\t' '{print $1}' "$baseline_records"
+    awk -F $'\t' '{print $1}' "$current_records"
+  } | grep -v '^$' | LC_ALL=C sort -u >"$record_keys_file"
+
+  typeset -A baseline_sha baseline_label baseline_exec baseline_sig
+  typeset -A current_sha current_label current_exec current_sig
+  typeset -a changed_items
+  local file_path=""
+  local sha256=""
+  local label=""
+  local executable=""
+  local signature=""
+  local added_count=0
+  local removed_count=0
+  local modified_count=0
+  typeset -a field_changes
+  local item_state=""
+  local why_it_matters=""
+  local summary_line=""
+  local headline=""
+
+  while IFS=$'\t' read -r file_path sha256 label executable signature; do
+    [[ -n "$file_path" ]] || continue
+    baseline_sha[$file_path]="$sha256"
+    baseline_label[$file_path]="$label"
+    baseline_exec[$file_path]="$executable"
+    baseline_sig[$file_path]="$signature"
+  done <"$baseline_records"
+
+  while IFS=$'\t' read -r file_path sha256 label executable signature; do
+    [[ -n "$file_path" ]] || continue
+    current_sha[$file_path]="$sha256"
+    current_label[$file_path]="$label"
+    current_exec[$file_path]="$executable"
+    current_sig[$file_path]="$signature"
+  done <"$current_records"
+
+  why_it_matters="Background persistence changes can indicate new software, updates, or unauthorized startup behavior."
+
+  while IFS= read -r file_path; do
+    [[ -n "$file_path" ]] || continue
+
+    if [[ -z "${baseline_sha[$file_path]:-}" && -z "${baseline_label[$file_path]:-}" && -z "${baseline_exec[$file_path]:-}" && -z "${baseline_sig[$file_path]:-}" ]]; then
+      added_count=$((added_count + 1))
+      changed_items+=("File: $file_path
+State: added
+Label: ${current_label[$file_path]:-unavailable}
+Executable: ${current_exec[$file_path]:-unavailable}
+Signature: ${current_sig[$file_path]:-unavailable}
+SHA256: ${current_sha[$file_path]:-unavailable}")
+      continue
+    fi
+
+    if [[ -z "${current_sha[$file_path]:-}" && -z "${current_label[$file_path]:-}" && -z "${current_exec[$file_path]:-}" && -z "${current_sig[$file_path]:-}" ]]; then
+      removed_count=$((removed_count + 1))
+      changed_items+=("File: $file_path
+State: removed
+Label: ${baseline_label[$file_path]:-unavailable}
+Executable: ${baseline_exec[$file_path]:-unavailable}
+Signature: ${baseline_sig[$file_path]:-unavailable}
+SHA256: ${baseline_sha[$file_path]:-unavailable}")
+      continue
+    fi
+
+    field_changes=()
+    [[ "${baseline_sha[$file_path]:-}" != "${current_sha[$file_path]:-}" ]] && field_changes+=("SHA256")
+    [[ "${baseline_label[$file_path]:-}" != "${current_label[$file_path]:-}" ]] && field_changes+=("Label")
+    [[ "${baseline_exec[$file_path]:-}" != "${current_exec[$file_path]:-}" ]] && field_changes+=("Executable")
+    [[ "${baseline_sig[$file_path]:-}" != "${current_sig[$file_path]:-}" ]] && field_changes+=("Signature")
+
+    if (( ${#field_changes[@]} == 0 )); then
+      continue
+    fi
+
+    modified_count=$((modified_count + 1))
+    changed_items+=("File: $file_path
+State: modified
+Changed fields: ${(j:, :)field_changes}
+Label: ${current_label[$file_path]:-${baseline_label[$file_path]:-unavailable}}
+Executable: ${current_exec[$file_path]:-${baseline_exec[$file_path]:-unavailable}}
+Old SHA256: ${baseline_sha[$file_path]:-unavailable}
+New SHA256: ${current_sha[$file_path]:-unavailable}
+Old Signature: ${baseline_sig[$file_path]:-unavailable}
+New Signature: ${current_sig[$file_path]:-unavailable}")
+  done <"$record_keys_file"
+
+  if (( added_count > 0 )); then
+    headline="A background service definition was added."
+  elif (( modified_count > 0 )); then
+    headline="A background service definition changed."
+  else
+    headline="A background service definition was removed."
+  fi
+
+  summary_line="- [high] LaunchAgent/LaunchDaemon Forensic Metadata (startup persistence): ${added_count} added, ${removed_count} removed, ${modified_count} modified"
+  printf '%s\n' "$summary_line" >"$summary_output_file"
+
+  {
+    echo "=== LaunchAgent/LaunchDaemon Forensic Metadata ==="
+    echo "Severity: high"
+    echo "Category: startup persistence"
+    echo "What changed: $headline"
+    echo "Why this matters: $why_it_matters"
+    echo "Why severity is high: High because launchd persistence metadata changed in a sensitive monitored area."
+    echo "Changes: ${added_count} added, ${removed_count} removed, ${modified_count} modified"
+    echo
+    echo "Affected items:"
+    if (( ${#changed_items[@]} > 0 )); then
+      local changed_item=""
+      for changed_item in "${changed_items[@]}"; do
+        echo "$changed_item"
+        echo
+      done
+    else
+      echo "(none)"
+    fi
+    echo
+  } >"$detail_output_file"
+}
+
 "$BIN_DIR/maccheck" >"$current_snapshot"
 
 baseline_index="$tmp_root/baseline-index.tsv"
@@ -367,6 +534,21 @@ for key in "${section_keys[@]}"; do
     continue
   fi
 
+  category="$(category_for_section "$title")"
+  category_seen[$category]=1
+
+  if [[ "$title" == "LaunchAgent/LaunchDaemon Forensic Metadata" ]]; then
+    forensic_detail_file="$tmp_root/$key.forensic.details"
+    forensic_summary_file="$tmp_root/$key.forensic.summary"
+    build_forensic_metadata_detail "$normalized_baseline_section" "$normalized_current_section" "$forensic_detail_file" "$forensic_summary_file"
+    severity="high"
+    severity_counts[$severity]=$(( ${severity_counts[$severity]:-0} + 1 ))
+    summary_line="$(cat "$forensic_summary_file")"
+    high_entries+=("$summary_line")
+    cat "$forensic_detail_file" >>"$details_file"
+    continue
+  fi
+
   diff_file="$tmp_root/$key.diff"
   diff -u "$normalized_baseline_section" "$normalized_current_section" >"$diff_file" || true
 
@@ -379,9 +561,7 @@ for key in "${section_keys[@]}"; do
     remove_count=$((remove_count - 1))
   fi
 
-  category="$(category_for_section "$title")"
   severity="$(severity_for_change "$title" "$add_count")"
-  category_seen[$category]=1
   severity_counts[$severity]=$(( ${severity_counts[$severity]:-0} + 1 ))
 
   summary_line="- [$severity] $title ($category): ${add_count} added, ${remove_count} removed"
@@ -411,7 +591,9 @@ changed_sections_count=$(( ${severity_counts[high]:-0} + ${severity_counts[mediu
 
 {
   echo "Mac Security Monitor Report"
-  echo "Generated: $(date '+%Y-%m-%d %H:%M:%S')"
+  if [[ "$REPORT_INCLUDE_TIMESTAMP" != "0" ]]; then
+    echo "Generated: $(date '+%Y-%m-%d %H:%M:%S')"
+  fi
   echo "Version: $(normalize_version "$(read_local_version)")"
   echo
 
@@ -459,6 +641,7 @@ changed_sections_count=$(( ${severity_counts[high]:-0} + ${severity_counts[mediu
     echo "Note: severity is heuristic and not proof of compromise."
   fi
 } >"$LATEST_REPORT_FILE"
+set_private_permissions "$LATEST_REPORT_FILE"
 
 if (( GUI_OUTPUT == 1 )); then
   if command -v open >/dev/null 2>&1; then

@@ -25,6 +25,11 @@ CRITICAL_REPORT_FILE="$STATE_DIR/critical-issues-last.txt"
 PENDING_CHANGE_ALERT_FILE="$STATE_DIR/pending-change-alert"
 PENDING_CHANGE_SNAPSHOT_FILE="$STATE_DIR/pending-change-snapshot"
 PENDING_CHANGE_GUI_ERROR_FILE="$STATE_DIR/pending-change-gui-error"
+PENDING_CHANGE_SUMMARY_FILE="$STATE_DIR/pending-change-summary.txt"
+PENDING_CHANGE_DETAILS_FILE="$STATE_DIR/pending-change-details.txt"
+PENDING_CHANGE_FINGERPRINT_FILE="$STATE_DIR/pending-change-fingerprint"
+PENDING_CHANGE_GUI_STATUS_FILE="$STATE_DIR/pending-change-gui-status"
+PENDING_CHANGE_UPDATED_AT_FILE="$STATE_DIR/pending-change-updated-at"
 LATEST_REPORT_FILE="$STATE_DIR/latest-report.txt"
 
 LAUNCH_AGENT_LABEL="${MSM_LAUNCH_AGENT_LABEL:-com.frapo78.securitycheck}"
@@ -41,7 +46,12 @@ to_lower() {
 
 normalize_launchctl_label() {
   local label="$1"
-  printf '%s\n' "$label" | sed -E 's/(\.[0-9]+)+$//'
+  label="$(printf '%s\n' "$label" | sed -E 's/(\.[0-9]+)+$//')"
+  if [[ "$label" == "Label" ]]; then
+    echo ""
+    return
+  fi
+  printf '%s\n' "$label"
 }
 
 is_apple_persistence_entry() {
@@ -88,6 +98,66 @@ print_error() { echo "[ERROR] $*"; }
 
 safe_mkdir() {
   mkdir -p "$1"
+}
+
+set_private_permissions() {
+  chmod 0600 "$1" 2>/dev/null || true
+}
+
+touch_private_file() {
+  : >"$1"
+  set_private_permissions "$1"
+}
+
+write_private_state_file() {
+  local target_file="$1"
+  shift
+
+  safe_mkdir "$(dirname "$target_file")" 2>/dev/null || return 1
+  printf '%s' "$*" >"$target_file"
+  set_private_permissions "$target_file"
+}
+
+sanitize_single_line_text() {
+  local value="$1"
+
+  value="$(printf '%s' "$value" | LC_CTYPE=C tr -cd '[:print:]\t ')"
+  value="$(printf '%s' "$value" | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
+  printf '%s\n' "$value"
+}
+
+read_state_value_safe() {
+  local source_file="$1"
+  local raw_value=""
+
+  [[ -f "$source_file" ]] || return 1
+  raw_value="$(LC_CTYPE=C tr '\0' '\n' <"$source_file" 2>/dev/null | head -n 1 || true)"
+  sanitize_single_line_text "$raw_value"
+}
+
+read_state_key_value_safe() {
+  local source_file="$1"
+  local key_prefix="$2"
+  local raw_value=""
+
+  [[ -f "$source_file" ]] || return 1
+  raw_value="$(LC_CTYPE=C tr '\0' '\n' <"$source_file" 2>/dev/null | awk -v prefix="$key_prefix" 'index($0, prefix) == 1 {print substr($0, length(prefix) + 1); exit}' || true)"
+  raw_value="$(sanitize_single_line_text "$raw_value")"
+  [[ -n "$raw_value" ]] || return 1
+  printf '%s\n' "$raw_value"
+}
+
+sanitize_gui_status_value() {
+  local value="$1"
+
+  case "$value" in
+    never-shown|shown|deferred|failed|updated-while-pending)
+      printf '%s\n' "$value"
+      ;;
+    *)
+      echo "invalid-state-data"
+      ;;
+  esac
 }
 
 log_event() {

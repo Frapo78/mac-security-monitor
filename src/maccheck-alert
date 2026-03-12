@@ -29,6 +29,7 @@ trap cleanup EXIT
 record_last_change() {
   safe_mkdir "$STATE_DIR" 2>/dev/null || return 0
   printf '%s\n' "Detected on $(date '+%Y-%m-%d %H:%M:%S')" >"$LAST_CHANGE_FILE" 2>/dev/null || true
+  set_private_permissions "$LAST_CHANGE_FILE"
 }
 
 notify() {
@@ -37,18 +38,404 @@ notify() {
 }
 
 clear_pending_change_state() {
-  rm -f "$PENDING_CHANGE_ALERT_FILE" "$PENDING_CHANGE_SNAPSHOT_FILE" "$PENDING_CHANGE_GUI_ERROR_FILE" 2>/dev/null || true
+  rm -f \
+    "$PENDING_CHANGE_ALERT_FILE" \
+    "$PENDING_CHANGE_SNAPSHOT_FILE" \
+    "$PENDING_CHANGE_GUI_ERROR_FILE" \
+    "$PENDING_CHANGE_SUMMARY_FILE" \
+    "$PENDING_CHANGE_DETAILS_FILE" \
+    "$PENDING_CHANGE_FINGERPRINT_FILE" \
+    "$PENDING_CHANGE_GUI_STATUS_FILE" \
+    "$PENDING_CHANGE_UPDATED_AT_FILE" \
+    2>/dev/null || true
 }
 
 mark_pending_change_state() {
   safe_mkdir "$STATE_DIR" 2>/dev/null || return 0
-  touch "$PENDING_CHANGE_ALERT_FILE" 2>/dev/null || true
+  touch_private_file "$PENDING_CHANGE_ALERT_FILE"
   cp -f "$NORMALIZED_TMP_FILE" "$PENDING_CHANGE_SNAPSHOT_FILE" 2>/dev/null || true
+  set_private_permissions "$PENDING_CHANGE_SNAPSHOT_FILE"
 }
 
 pending_change_state_matches_current() {
   [[ -f "$PENDING_CHANGE_SNAPSHOT_FILE" ]] || return 1
   cmp -s "$PENDING_CHANGE_SNAPSHOT_FILE" "$NORMALIZED_TMP_FILE"
+}
+
+normalize_section_key() {
+  echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g; s/__\+/_/g; s/^_//; s/_$//'
+}
+
+split_snapshot() {
+  local source_file="$1"
+  local out_dir="$2"
+  local index_file="$3"
+  local current_title=""
+  local current_key=""
+  local line=""
+
+  mkdir -p "$out_dir"
+  : >"$index_file"
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == "=== "* && "$line" == *" ===" ]]; then
+      current_title="${line#=== }"
+      current_title="${current_title% ===}"
+      current_key="$(normalize_section_key "$current_title")"
+      printf '%s\t%s\n' "$current_key" "$current_title" >>"$index_file"
+      : >"$out_dir/$current_key"
+      continue
+    fi
+
+    if [[ -n "$current_key" ]]; then
+      printf '%s\n' "$line" >>"$out_dir/$current_key"
+    fi
+  done <"$source_file"
+}
+
+category_for_section() {
+  case "$1" in
+    "Non-Apple Launchctl Labels (user domain)"|"LaunchAgents in User Library"|"LaunchAgents in System Library"|"LaunchDaemons in System Library"|"LaunchAgent/LaunchDaemon Forensic Metadata")
+      echo "startup persistence"
+      ;;
+    "Listening TCP Summary"|"Established TCP Connections (Deep Mode)"|"Network Configuration Summary (Deep Mode)")
+      echo "network exposure"
+      ;;
+    "macOS Security Controls")
+      echo "security controls"
+      ;;
+    *)
+      echo "system integrity"
+      ;;
+  esac
+}
+
+severity_for_alert_change() {
+  local title="$1"
+  local add_count="$2"
+
+  case "$title" in
+    "Listening TCP Summary"|"Established TCP Connections (Deep Mode)"|"macOS Security Controls")
+      echo "high"
+      return
+      ;;
+  esac
+
+  if is_persistence_section "$title"; then
+    if (( add_count > 0 )); then
+      echo "high"
+    else
+      echo "medium"
+    fi
+    return
+  fi
+
+  echo "medium"
+}
+
+count_diff_lines() {
+  local prefix="$1"
+  local diff_file="$2"
+  awk -v prefix="$prefix" 'index($0, prefix) == 1 {count++} END {print count+0}' "$diff_file" 2>/dev/null | tr -d ' '
+}
+
+first_diff_line() {
+  local prefix="$1"
+  local header_prefix="$2"
+  local diff_file="$3"
+  awk -v prefix="$prefix" -v header_prefix="$header_prefix" '
+    index($0, prefix) == 1 && index($0, header_prefix) != 1 {print substr($0, 2); exit}
+  ' "$diff_file"
+}
+
+describe_finding_headline() {
+  local title="$1"
+  local severity="$2"
+  local first_added="$3"
+  local first_removed="$4"
+
+  case "$title" in
+    "Non-Apple Launchctl Labels (user domain)")
+      if [[ -n "$first_added" ]]; then
+        echo "A background label was added: $first_added"
+      elif [[ -n "$first_removed" ]]; then
+        echo "A background label was removed: $first_removed"
+      else
+        echo "Background service labels changed."
+      fi
+      ;;
+    "LaunchAgents in User Library"|"LaunchAgents in System Library"|"LaunchDaemons in System Library")
+      if [[ -n "$first_added" ]]; then
+        echo "A startup item was added: $first_added"
+      elif [[ -n "$first_removed" ]]; then
+        echo "A startup item was removed: $first_removed"
+      else
+        echo "Startup items changed."
+      fi
+      ;;
+    "LaunchAgent/LaunchDaemon Forensic Metadata")
+      echo "A background service definition changed."
+      ;;
+    "Listening TCP Summary")
+      if [[ -n "$first_added" ]]; then
+        echo "A listening network service changed: $first_added"
+      else
+        echo "Listening network services changed."
+      fi
+      ;;
+    "macOS Security Controls")
+      echo "A core macOS security setting changed."
+      ;;
+    *)
+      echo "A monitored system area changed."
+      ;;
+  esac
+}
+
+describe_why_it_matters() {
+  local title="$1"
+
+  case "$title" in
+    "Non-Apple Launchctl Labels (user domain)"|"LaunchAgents in User Library"|"LaunchAgents in System Library"|"LaunchDaemons in System Library"|"LaunchAgent/LaunchDaemon Forensic Metadata")
+      echo "Background persistence changes can indicate new software, updates, or unauthorized startup behavior."
+      ;;
+    "Listening TCP Summary"|"Established TCP Connections (Deep Mode)")
+      echo "Listening services may expose your Mac to local or remote connections that were not present in the trusted baseline."
+      ;;
+    "macOS Security Controls")
+      echo "Changes to core security controls can reduce the overall protection level of the system."
+      ;;
+    *)
+      echo "This change affects a monitored system surface and should be reviewed before trusting it."
+      ;;
+  esac
+}
+
+describe_severity_reason() {
+  local title="$1"
+  local severity="$2"
+  local add_count="$3"
+
+  case "$severity" in
+    high)
+      if is_persistence_section "$title" && (( add_count > 0 )); then
+        echo "High because a new persistence-related item was detected."
+      elif [[ "$title" == "Listening TCP Summary" || "$title" == "Established TCP Connections (Deep Mode)" ]]; then
+        echo "High because network-exposed services changed."
+      elif [[ "$title" == "macOS Security Controls" ]]; then
+        echo "High because a core security control changed."
+      else
+        echo "High because this finding affects a sensitive monitored area."
+      fi
+      ;;
+    medium)
+      echo "Medium because an existing sensitive item changed but no clearly new persistence item was added."
+      ;;
+    *)
+      echo "Low because the change is less directly associated with persistence or exposure."
+      ;;
+  esac
+}
+
+write_pending_gui_status() {
+  write_private_state_file "$PENDING_CHANGE_GUI_STATUS_FILE" "$1"$'\n' || true
+}
+
+write_pending_updated_at() {
+  write_private_state_file "$PENDING_CHANGE_UPDATED_AT_FILE" "$(date '+%Y-%m-%d %H:%M:%S')"$'\n' || true
+}
+
+compute_pending_fingerprint() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$NORMALIZED_TMP_FILE" | awk '{print $1}'
+  else
+    cksum "$NORMALIZED_TMP_FILE" | awk '{print $1}'
+  fi
+}
+
+generate_pending_change_artifacts() {
+  local alert_state="$1"
+  local tmp_root=""
+  local baseline_dir=""
+  local current_dir=""
+  local baseline_index=""
+  local current_index=""
+
+  tmp_root="$(mktemp -d -t mac-security-monitor-alert-summary.XXXXXX)"
+  baseline_dir="$tmp_root/baseline"
+  current_dir="$tmp_root/current"
+  baseline_index="$tmp_root/baseline-index.tsv"
+  current_index="$tmp_root/current-index.tsv"
+
+  split_snapshot "$NORMALIZED_BASELINE_FILE" "$baseline_dir" "$baseline_index"
+  split_snapshot "$NORMALIZED_TMP_FILE" "$current_dir" "$current_index"
+
+  typeset -A baseline_titles current_titles severity_counts
+  typeset -a section_keys high_findings medium_findings low_findings detail_blocks
+  local key=""
+  local title=""
+  local baseline_section=""
+  local current_section=""
+  local diff_file=""
+  local add_count=0
+  local remove_count=0
+  local category=""
+  local severity=""
+  local first_added=""
+  local first_removed=""
+  local headline=""
+  local why_it_matters=""
+  local severity_reason=""
+  local top_headline=""
+  local summary_text=""
+  local details_text=""
+
+  severity_counts[high]=0
+  severity_counts[medium]=0
+  severity_counts[low]=0
+
+  while IFS=$'\t' read -r key title; do
+    [[ -n "$key" ]] || continue
+    baseline_titles[$key]="$title"
+    section_keys+=("$key")
+  done <"$baseline_index"
+
+  while IFS=$'\t' read -r key title; do
+    [[ -n "$key" ]] || continue
+    current_titles[$key]="$title"
+    section_keys+=("$key")
+  done <"$current_index"
+
+  section_keys=("${(@ou)section_keys}")
+
+  for key in "${section_keys[@]}"; do
+    title="${current_titles[$key]:-${baseline_titles[$key]:-$key}}"
+    baseline_section="$baseline_dir/$key"
+    current_section="$current_dir/$key"
+    [[ -f "$baseline_section" ]] || : >"$baseline_section"
+    [[ -f "$current_section" ]] || : >"$current_section"
+
+    if cmp -s "$baseline_section" "$current_section"; then
+      continue
+    fi
+
+    diff_file="$tmp_root/$key.diff"
+    diff -u "$baseline_section" "$current_section" >"$diff_file" || true
+
+    add_count="$(count_diff_lines '+' "$diff_file")"
+    remove_count="$(count_diff_lines '-' "$diff_file")"
+    if (( add_count >= 1 )); then
+      add_count=$((add_count - 1))
+    fi
+    if (( remove_count >= 1 )); then
+      remove_count=$((remove_count - 1))
+    fi
+
+    category="$(category_for_section "$title")"
+    severity="$(severity_for_alert_change "$title" "$add_count")"
+    severity_counts[$severity]=$(( ${severity_counts[$severity]:-0} + 1 ))
+    first_added="$(first_diff_line "+" "+++" "$diff_file")"
+    first_removed="$(first_diff_line "-" "---" "$diff_file")"
+    headline="$(describe_finding_headline "$title" "$severity" "$first_added" "$first_removed")"
+    why_it_matters="$(describe_why_it_matters "$title")"
+    severity_reason="$(describe_severity_reason "$title" "$severity" "$add_count")"
+
+    if [[ -z "$top_headline" ]]; then
+      top_headline="$headline"
+    fi
+
+    case "$severity" in
+      high) high_findings+=("- $headline") ;;
+      medium) medium_findings+=("- $headline") ;;
+      *) low_findings+=("- $headline") ;;
+    esac
+
+    detail_blocks+=("=== $title ===
+Severity: $severity
+Category: $category
+What changed: $headline
+Why this matters: $why_it_matters
+Why severity is $severity: $severity_reason
+Changes: ${add_count} added, ${remove_count} removed
+Primary added entry: ${first_added:-none}
+Primary removed entry: ${first_removed:-none}")
+  done
+
+  if [[ -z "$top_headline" ]]; then
+    top_headline="Pending monitored changes need review."
+  fi
+
+  summary_text="Mac Security Monitor Pending Alert
+Generated: $(date '+%Y-%m-%d %H:%M:%S')
+Version: $(normalize_version "$(read_local_version)")
+State: $alert_state
+High: ${severity_counts[high]:-0} | Medium: ${severity_counts[medium]:-0} | Low: ${severity_counts[low]:-0}
+Top finding: $top_headline
+
+Review the pending findings before trusting them or updating the baseline.
+"
+
+  if (( ${#high_findings[@]} > 0 )); then
+    summary_text+=$'\nHigh severity findings'
+    local finding=""
+    for finding in "${high_findings[@]}"; do
+      summary_text+=$'\n'"$finding"
+    done
+    summary_text+=$'\n'
+  fi
+  if (( ${#medium_findings[@]} > 0 )); then
+    summary_text+=$'\nMedium severity findings'
+    local finding=""
+    for finding in "${medium_findings[@]}"; do
+      summary_text+=$'\n'"$finding"
+    done
+    summary_text+=$'\n'
+  fi
+  if (( ${#low_findings[@]} > 0 )); then
+    summary_text+=$'\nLow severity findings'
+    local finding=""
+    for finding in "${low_findings[@]}"; do
+      summary_text+=$'\n'"$finding"
+    done
+    summary_text+=$'\n'
+  fi
+
+  details_text="$summary_text
+
+Detailed findings
+"
+  local detail_block=""
+  for detail_block in "${detail_blocks[@]}"; do
+    details_text+=$'\n'"$detail_block"$'\n'
+  done
+
+  write_private_state_file "$PENDING_CHANGE_SUMMARY_FILE" "$summary_text"$'\n' || true
+  write_private_state_file "$PENDING_CHANGE_DETAILS_FILE" "$details_text"$'\n' || true
+  rm -rf "$tmp_root"
+}
+
+current_alert_dialog_body() {
+  local alert_state="$1"
+  local top_finding="Pending monitored changes need review."
+  local counts_line="High: 0 | Medium: 0 | Low: 0"
+
+  if [[ -f "$PENDING_CHANGE_SUMMARY_FILE" ]]; then
+    top_finding="$(grep -E '^Top finding: ' "$PENDING_CHANGE_SUMMARY_FILE" | sed 's/^Top finding: //' | head -n 1 || true)"
+    counts_line="$(grep -E '^High: ' "$PENDING_CHANGE_SUMMARY_FILE" | head -n 1 || true)"
+  fi
+
+  [[ -n "$top_finding" ]] || top_finding="Pending monitored changes need review."
+  [[ -n "$counts_line" ]] || counts_line="High: 0 | Medium: 0 | Low: 0"
+
+  cat <<EOF
+Mac Security Monitor has pending security changes.
+
+Status: $alert_state
+$counts_line
+Top issue: $top_finding
+
+Choose Review Now to open details, Update Baseline if the changes are expected, or Later to keep the alert pending.
+EOF
 }
 
 is_persistence_section() {
@@ -130,6 +517,9 @@ normalize_persistence_section() {
       flush_filtered_forensic_record "$output_file" "$current_file" "$current_label" "$current_exec" "${record_lines[@]}"
     fi
 
+    awk 'NF > 0 {print}' "$output_file" >"$output_file.cleaned"
+    mv "$output_file.cleaned" "$output_file"
+
     return
   fi
 
@@ -146,6 +536,7 @@ normalize_persistence_section() {
       normalized_line="$(normalize_launchctl_label "$line")"
     fi
 
+    [[ -n "$normalized_line" ]] || continue
     is_known_safe_persistence_entry "$normalized_line" && continue
     printf '%s\n' "$normalized_line" >>"$output_file"
   done <"$input_file"
@@ -197,6 +588,8 @@ normalize_snapshot_for_compare() {
 }
 
 run_change_alert_dialog() {
+  local alert_state="$1"
+
   : >"$ALERT_STDOUT_FILE"
   : >"$ALERT_STDERR_FILE"
 
@@ -205,9 +598,10 @@ run_change_alert_dialog() {
     return 127
   fi
 
-  osascript <<'OSA' >"$ALERT_STDOUT_FILE" 2>"$ALERT_STDERR_FILE"
+  ALERT_BODY="$(current_alert_dialog_body "$alert_state")" osascript <<'OSA' >"$ALERT_STDOUT_FILE" 2>"$ALERT_STDERR_FILE"
+  set alertBody to system attribute "ALERT_BODY"
 try
-  display dialog "Mac Security Monitor detected system changes." buttons {"Help", "Show Details", "Update Baseline", "Disable Monitor"} default button "Show Details" with title "Mac Security Monitor"
+  display dialog alertBody buttons {"Later", "Review Now", "Update Baseline"} default button "Review Now" with title "Mac Security Monitor"
   return button returned of result
 on error errMsg number errNum
   error errMsg number errNum
@@ -221,7 +615,12 @@ OSA
 record_gui_alert_failure() {
   local message="$1"
   safe_mkdir "$STATE_DIR" 2>/dev/null || return 0
-  printf '%s\n' "$message" >"$PENDING_CHANGE_GUI_ERROR_FILE" 2>/dev/null || true
+  write_private_state_file "$PENDING_CHANGE_GUI_ERROR_FILE" "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')
+Action: change-alert-dialog
+Phase: display-dialog
+Notification fallback attempted: yes
+Error: $message
+" || true
 }
 
 prompt_critical_issues_action() {
@@ -356,21 +755,41 @@ fi
 
 record_last_change
 
+current_fingerprint="$(compute_pending_fingerprint)"
+pending_exists=0
+alert_state="new pending alert"
+
 if [[ -f "$PENDING_CHANGE_ALERT_FILE" ]]; then
+  pending_exists=1
   if pending_change_state_matches_current; then
+    if [[ ! -f "$PENDING_CHANGE_SUMMARY_FILE" || ! -f "$PENDING_CHANGE_DETAILS_FILE" ]]; then
+      generate_pending_change_artifacts "pending alert still active"
+    fi
     log_event "System changes still pending user action."
     exit 0
   fi
+fi
 
-  mark_pending_change_state
+if (( pending_exists == 1 )); then
+  alert_state="updated pending alert"
   log_event "Pending change alert updated with new system changes."
 else
-  mark_pending_change_state
   log_event "System changes detected against baseline."
 fi
 
+mark_pending_change_state
+generate_pending_change_artifacts "$alert_state"
+write_private_state_file "$PENDING_CHANGE_FINGERPRINT_FILE" "$current_fingerprint"$'\n' || true
+write_pending_updated_at
+
+if (( pending_exists == 1 )); then
+  write_pending_gui_status "updated-while-pending"
+else
+  write_pending_gui_status "never-shown"
+fi
+
 set +e
-run_change_alert_dialog
+run_change_alert_dialog "$alert_state"
 dialog_rc=$?
 set -e
 
@@ -380,6 +799,7 @@ if [[ "$dialog_rc" -ne 0 ]]; then
     dialog_error="unknown AppleScript UI error"
   fi
   record_gui_alert_failure "$dialog_error"
+  write_pending_gui_status "failed"
   log_event "WARN: GUI alert could not be displayed (exit $dialog_rc): $dialog_error"
   notify "Security changes detected. Open Mac Security Monitor to review."
   exit 0
@@ -389,17 +809,12 @@ BUTTON="$(tr -d '\r' <"$ALERT_STDOUT_FILE" | sed -n '1p')"
 rm -f "$PENDING_CHANGE_GUI_ERROR_FILE" 2>/dev/null || true
 
 case "$BUTTON" in
-  "Help")
-    clear_pending_change_state
-    if [[ -f "$DOC_FILE" ]]; then
-      open -a TextEdit "$DOC_FILE" >/dev/null 2>&1 || true
+  "Review Now")
+    write_pending_gui_status "shown"
+    if [[ -f "$PENDING_CHANGE_DETAILS_FILE" ]]; then
+      open -a TextEdit "$PENDING_CHANGE_DETAILS_FILE" >/dev/null 2>&1 || true
     fi
-    log_event "Alert acknowledged with Help action."
-    ;;
-  "Show Details")
-    clear_pending_change_state
-    open -a TextEdit "$TMP_FILE" >/dev/null 2>&1 || true
-    log_event "Alert acknowledged with Show Details action."
+    log_event "Alert reviewed by user."
     ;;
   "Update Baseline")
     cp -f "$TMP_FILE" "$BASELINE_FILE"
@@ -407,11 +822,9 @@ case "$BUTTON" in
     log_event "Baseline updated from alert dialog."
     notify "Baseline updated successfully"
     ;;
-  "Disable Monitor")
-    clear_pending_change_state
-    launchctl bootout "gui/$(id -u)" "$LAUNCH_AGENT_PLIST" >/dev/null 2>&1 || true
-    log_event "Monitoring disabled by user action."
-    notify "Monitoring disabled"
+  "Later")
+    write_pending_gui_status "deferred"
+    log_event "Alert deferred by user; pending state retained."
     ;;
   *)
     log_event "WARN: GUI alert returned an unexpected result: ${BUTTON:-empty}"

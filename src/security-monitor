@@ -66,10 +66,12 @@ case "$cmd" in
     exec "$COMMANDS_DIR/self-test.sh" "$@"
     ;;
   report)
-    exec "$COMMANDS_DIR/report.sh"
+    shift
+    exec "$COMMANDS_DIR/report.sh" "$@"
     ;;
   audit)
-    exec "$COMMANDS_DIR/audit.sh"
+    shift
+    exec "$COMMANDS_DIR/audit.sh" "$@"
     ;;
   help|--help|-h)
     exec "$COMMANDS_DIR/help.sh"

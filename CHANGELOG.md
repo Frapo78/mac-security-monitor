@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and the project follows Semantic Versioning.
 
-## [Unreleased]
+## [1.0.7] - 2026-03-12
 
 ### Changed
 
@@ -12,6 +12,8 @@ The format follows Keep a Changelog and the project follows Semantic Versioning.
 - Normalized dynamic `application.*` launchctl labels before snapshot comparison so transient runtime instances do not look like new persistence.
 - Tightened `security-monitor report` severity logic so only newly added non-Apple, non-whitelisted persistence entries are treated as high severity.
 - Tightened LaunchAgent status validation so isolated or temporary installs do not incorrectly report another installation's loaded job as their own.
+- Redesigned the pending change alert flow around a 3-button GUI dialog (`Review Now`, `Update Baseline`, `Later`) with generated pending summary and detail files.
+- Pending alert state now stores a fingerprint, GUI status, human-readable summary, and updated timestamp so the alert content can be refreshed without duplicating dialogs.
 
 ### Validation
 
@@ -22,6 +24,11 @@ The format follows Keep a Changelog and the project follows Semantic Versioning.
 
 - Filtered the `launchctl` table header so `Label` is not captured as a fake persistence entry.
 - Fixed false-green LaunchAgent checks in `security-monitor` and `security-monitor self-test` when a different installation with the same label is already loaded on the system.
+- Fixed the change-alert GUI so it no longer requests 4 AppleScript buttons.
+- Fixed pending alert summary/detail rendering so generated files no longer contain literal `$'\\n'` artifacts.
+- Added compatibility normalization for legacy baselines that still contain the old `Label` launchctl noise entry.
+- Tightened `latest-report.txt` permissions and added an optional stable report mode via `MSM_REPORT_INCLUDE_TIMESTAMP=0` for deterministic testing.
+- Improved forensic metadata report clarity so `security-monitor report` identifies affected launchd plist files, labels, executables, signatures, and hash changes more clearly.
 
 ## [1.0.6] - 2026-03-10
 

@@ -1,6 +1,6 @@
 # Mac Security Monitor
 
-![Version](https://img.shields.io/badge/version-1.0.6-blue)
+![Version](https://img.shields.io/badge/version-1.0.7-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20Ventura%20%7C%20Sonoma-black)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/github/actions/workflow/status/Frapo78/mac-security-monitor/ci.yml?label=CI)
@@ -51,7 +51,7 @@ In short: the tool tracks persistence points, startup behavior, network exposure
 
 - Baseline-based integrity monitoring
 - Hourly background monitoring through `launchd`
-- Interactive GUI alerts for detected changes with pending-alert tracking
+- Interactive GUI alerts for detected changes with pending-alert tracking and readable pending summaries
 - Lightweight local logging
 - Status, baseline management, and update CLI commands
 - Optional OTA update checks and user-confirmed upgrades
@@ -131,7 +131,7 @@ security-monitor self-test
 
 ## Release Validation Status
 
-Version `1.0.6` is published with a controlled release approach to maximize reliability across different macOS setups.
+Version `1.0.7` is published with a controlled release approach to maximize reliability across different macOS setups.
 
 Personally validated in local stress tests:
 
@@ -217,6 +217,8 @@ security-monitor report --full
 security-monitor report --gui
 ```
 
+The report highlights affected areas and, for launchd forensic metadata changes, now aims to show the impacted plist file, label, executable path, signature, and hash changes more explicitly.
+
 ## Updating
 
 Manual update check:
@@ -245,7 +247,7 @@ Development priorities are tracked in the public roadmap:
 
 ## Compatibility Feedback Window
 
-For `v1.0.6`, maintain a 7-10 day compatibility feedback window before declaring the release fully validated across broader macOS environments.
+For `v1.0.7`, maintain a 7-10 day compatibility feedback window before declaring the release fully validated across broader macOS environments.
 
 Use the GitHub compatibility issue template to share test outcomes and edge cases.
 
@@ -258,9 +260,18 @@ Use the GitHub compatibility issue template to share test outcomes and edge case
 ## Alert Behavior
 
 - Change alerts now use a persistent pending state.
+- The main alert dialog uses three actions only:
+  - `Review Now`
+  - `Update Baseline`
+  - `Later`
+- `Review Now` opens a human-readable pending detail file instead of the raw snapshot dump.
+- `Later` keeps the alert pending without creating duplicate alert windows on every hourly run.
 - If the GUI dialog cannot be displayed, the alert remains pending instead of being logged as a user dismissal.
 - The monitor does not duplicate the same pending alert on every hourly run.
 - A new alert attempt is made only when the detected change set actually changes.
+- Pending alert summaries are stored under:
+  - `~/.mac-security-monitor/state/pending-change-summary.txt`
+  - `~/.mac-security-monitor/state/pending-change-details.txt`
 
 ## Snapshot Stability
 

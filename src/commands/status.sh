@@ -42,7 +42,12 @@ fi
 echo
 echo "Last detected change:"
 if [[ -f "$LAST_CHANGE_FILE" ]]; then
-  cat "$LAST_CHANGE_FILE"
+  last_change_value="$(read_state_value_safe "$LAST_CHANGE_FILE" || true)"
+  if [[ -n "$last_change_value" ]]; then
+    echo "$last_change_value"
+  else
+    echo "State file is unreadable or empty."
+  fi
 else
   echo "No detected changes recorded yet."
 fi
@@ -52,6 +57,35 @@ echo "Pending change alert:"
 if [[ -f "$PENDING_CHANGE_ALERT_FILE" ]]; then
   echo "Present: yes"
   echo "Last updated: $(stat -f '%Sm' "$PENDING_CHANGE_ALERT_FILE")"
+  if [[ -f "$PENDING_CHANGE_UPDATED_AT_FILE" ]]; then
+    pending_timestamp="$(read_state_value_safe "$PENDING_CHANGE_UPDATED_AT_FILE" || true)"
+    if [[ -n "$pending_timestamp" ]]; then
+      echo "Pending state timestamp: $pending_timestamp"
+    else
+      echo "Pending state timestamp: unreadable"
+    fi
+  fi
+  if [[ -f "$PENDING_CHANGE_GUI_STATUS_FILE" ]]; then
+    gui_status_value="$(read_state_value_safe "$PENDING_CHANGE_GUI_STATUS_FILE" || true)"
+    gui_status_value="$(sanitize_gui_status_value "$gui_status_value")"
+    echo "GUI status: $gui_status_value"
+  fi
+  if [[ -f "$PENDING_CHANGE_SUMMARY_FILE" ]]; then
+    top_finding="$(read_state_key_value_safe "$PENDING_CHANGE_SUMMARY_FILE" 'Top finding: ' || true)"
+    if [[ -n "$top_finding" ]]; then
+      echo "Top pending finding: $top_finding"
+    else
+      echo "Top pending finding: unavailable"
+    fi
+  fi
+  if [[ -f "$PENDING_CHANGE_GUI_ERROR_FILE" ]]; then
+    gui_error_summary="$(read_state_key_value_safe "$PENDING_CHANGE_GUI_ERROR_FILE" 'Error: ' || true)"
+    if [[ -n "$gui_error_summary" ]]; then
+      echo "Last GUI error: $gui_error_summary"
+    else
+      echo "Last GUI error: unreadable"
+    fi
+  fi
 else
   echo "Present: no"
 fi
