@@ -1,6 +1,6 @@
 # Mac Security Monitor
 
-![Version](https://img.shields.io/badge/version-1.0.7-blue)
+![Version](https://img.shields.io/badge/version-1.0.8-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20Ventura%20%7C%20Sonoma-black)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/github/actions/workflow/status/Frapo78/mac-security-monitor/ci.yml?label=CI)
@@ -34,7 +34,7 @@ Optional deep checks (only when `MSM_DEEP_NETWORK=1`):
 1. Established TCP connections.
 2. DNS/network configuration summary.
 
-To reduce noise, the monitor automatically ignores Apple persistence entries, normalizes dynamic `application.*` runtime labels, and suppresses common trusted vendor startup components such as Google, OpenAI, Anthropic, Homebrew, Adobe, Epson, and IDrive.
+The monitor normalizes dynamic `application.*` runtime labels. Persistence entries are not excluded solely based on a vendor name or an Apple-like label: those names do not establish a publisher's identity.
 
 In short: the tool tracks persistence points, startup behavior, network exposure, and core platform protections, then compares them with your trusted baseline to detect changes.
 
@@ -45,7 +45,7 @@ In short: the tool tracks persistence points, startup behavior, network exposure
 - It alerts you when sensitive security points change, such as startup services, scheduled tasks, login items, and listening network ports.
 - It can reveal suspicious situations early, for example a hidden script opening a network port and exposing your Mac to remote intrusion.
 - It gives you a clear before/after baseline comparison, so you can investigate unexpected changes before they become a bigger security problem.
-- It reduces false positives by filtering known-safe Apple and common vendor persistence entries, so new suspicious startup items stand out more clearly.
+- It compares persistence entries against the baseline, including entries with familiar vendor names. Review changes and code signatures before trusting them.
 
 ## Features
 
@@ -131,7 +131,7 @@ security-monitor self-test
 
 ## Release Validation Status
 
-Version `1.0.7` is published with a controlled release approach to maximize reliability across different macOS setups.
+Version `1.0.8` is published with a controlled release approach to maximize reliability across different macOS setups.
 
 Personally validated in local stress tests:
 
@@ -215,9 +215,12 @@ Generate a grouped change report:
 security-monitor report
 security-monitor report --full
 security-monitor report --gui
+security-monitor report --saved
 ```
 
 The report highlights affected areas and, for launchd forensic metadata changes, now aims to show the impacted plist file, label, executable path, signature, and hash changes more explicitly.
+
+`report --saved` prints the last complete report from `~/.mac-security-monitor/state/latest-report.txt` without collecting a new snapshot. Each new report replaces this file; it may be older than the current system state. Generate a fresh report to check current changes. If no saved report exists, run `security-monitor report` first.
 
 ## Updating
 
@@ -247,7 +250,7 @@ Development priorities are tracked in the public roadmap:
 
 ## Compatibility Feedback Window
 
-For `v1.0.7`, maintain a 7-10 day compatibility feedback window before declaring the release fully validated across broader macOS environments.
+For `v1.0.8`, maintain a 7-10 day compatibility feedback window before declaring the release fully validated across broader macOS environments.
 
 Use the GitHub compatibility issue template to share test outcomes and edge cases.
 

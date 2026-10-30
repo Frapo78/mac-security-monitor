@@ -80,14 +80,7 @@ is_whitelisted_vendor_entry() {
 }
 
 is_known_safe_persistence_entry() {
-  local value="$1"
-  local normalized_value
-
-  normalized_value="$(normalize_launchctl_label "$value")"
-
-  is_apple_persistence_entry "$normalized_value" && return 0
-  is_whitelisted_vendor_entry "$normalized_value" && return 0
-
+  # A name or path alone cannot establish the identity of a publisher.
   return 1
 }
 

@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and the project follows Semantic Versioning.
 
+## [1.0.8] - 2026-10-30
+
+### Added
+
+- Added `security-monitor report --saved` to display the most recently generated full report without collecting a new snapshot.
+
+### Security
+
+- Stop suppressing persistence entries based only on Apple-like names, paths, or vendor substrings. Existing baselines may show additional entries and should be reviewed before updating.
+- Retry a failed GUI alert on the next monitoring run when the change remains pending. Explicitly deferred alerts remain deferred.
+
 ## [1.0.7] - 2026-03-12
 
 ### Changed

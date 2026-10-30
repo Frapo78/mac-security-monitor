@@ -12,6 +12,7 @@ source "$SCRIPT_DIR/../lib/common.sh"
 SUMMARY_ONLY=0
 FULL_OUTPUT=0
 GUI_OUTPUT=0
+SAVED_OUTPUT=0
 REPORT_INCLUDE_TIMESTAMP="${MSM_REPORT_INCLUDE_TIMESTAMP:-1}"
 
 usage() {
@@ -21,6 +22,7 @@ Usage:
   security-monitor report --summary
   security-monitor report --full
   security-monitor report --gui
+  security-monitor report --saved
 USAGE
 }
 
@@ -35,6 +37,9 @@ while [[ $# -gt 0 ]]; do
     --gui)
       GUI_OUTPUT=1
       ;;
+    --saved)
+      SAVED_OUTPUT=1
+      ;;
     --help|-h)
       usage
       exit 0
@@ -47,6 +52,19 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
+
+if (( SAVED_OUTPUT == 1 )); then
+  if (( SUMMARY_ONLY == 1 || FULL_OUTPUT == 1 || GUI_OUTPUT == 1 )); then
+    print_error "--saved cannot be combined with other report options."
+    exit 1
+  fi
+  if [[ ! -f "$LATEST_REPORT_FILE" || ! -r "$LATEST_REPORT_FILE" ]]; then
+    print_error "No readable saved report is available. Run security-monitor report first."
+    exit 1
+  fi
+  cat "$LATEST_REPORT_FILE"
+  exit 0
+fi
 
 if (( SUMMARY_ONLY == 1 && FULL_OUTPUT == 1 )); then
   print_error "Use either --summary or --full, not both."

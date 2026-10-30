@@ -765,8 +765,11 @@ if [[ -f "$PENDING_CHANGE_ALERT_FILE" ]]; then
     if [[ ! -f "$PENDING_CHANGE_SUMMARY_FILE" || ! -f "$PENDING_CHANGE_DETAILS_FILE" ]]; then
       generate_pending_change_artifacts "pending alert still active"
     fi
-    log_event "System changes still pending user action."
-    exit 0
+    if [[ "$(read_state_value_safe "$PENDING_CHANGE_GUI_STATUS_FILE")" != "failed" ]]; then
+      log_event "System changes still pending user action."
+      exit 0
+    fi
+    log_event "Retrying GUI alert after a previous delivery failure."
   fi
 fi
 

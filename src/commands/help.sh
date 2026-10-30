@@ -23,4 +23,5 @@ Usage:
   security-monitor reinstall
   security-monitor self-test
   security-monitor report
+  security-monitor report --saved
 USAGE
